@@ -1846,7 +1846,10 @@ app.get('/api/customers', async (req, res) => {
       });
     }
     
-    const rawCustomers = await query.limit(20).orderBy(getColName('LastName', conn), getColName('FirstName', conn));
+    const rawCustomers = await query.limit(20)
+      .orderBy(getColName('LastName', conn))
+      .orderBy(getColName('FirstName', conn))
+      .orderBy(getColName('CustomerId', conn));
     
     // Normalize column names for consistent frontend consumption
     const customers = rawCustomers.map(customer => {
@@ -2655,59 +2658,59 @@ app.put('/api/customers/:id', async (req, res) => {
     
     let result;
     if (config.client === 'pg') {
-      // PostgreSQL
-      result = await db(tableName)
-        .where('customer_id', customerId)
-        .update({
-          first_name: customerData.firstName,
-          last_name: customerData.lastName,
-          company: customerData.company || null,
-          address: customerData.address || null,
-          city: customerData.city || null,
-          state: customerData.state || null,
-          country: customerData.country || null,
-          postal_code: customerData.postalCode || null,
-          phone: customerData.phone || null,
-          fax: customerData.fax || null,
-          email: customerData.email,
-          support_rep_id: customerData.supportRepId || null
-        });
+      // PostgreSQL - only update fields that are provided
+      const updateData = {};
+      if (customerData.firstName !== undefined) updateData.first_name = customerData.firstName;
+      if (customerData.lastName !== undefined) updateData.last_name = customerData.lastName;
+      if (customerData.email !== undefined) updateData.email = customerData.email;
+      if (customerData.company !== undefined) updateData.company = customerData.company || null;
+      if (customerData.address !== undefined) updateData.address = customerData.address || null;
+      if (customerData.city !== undefined) updateData.city = customerData.city || null;
+      if (customerData.state !== undefined) updateData.state = customerData.state || null;
+      if (customerData.country !== undefined) updateData.country = customerData.country || null;
+      if (customerData.postalCode !== undefined) updateData.postal_code = customerData.postalCode || null;
+      if (customerData.phone !== undefined) updateData.phone = customerData.phone || null;
+      if (customerData.fax !== undefined) updateData.fax = customerData.fax || null;
+      if (customerData.supportRepId !== undefined) updateData.support_rep_id = customerData.supportRepId || null;
+      
+      console.log(`🔧 PostgreSQL update data:`, updateData);
+      result = await db(tableName).where('customer_id', customerId).update(updateData);
     } else if (config.client === 'oracledb') {
-      // Oracle
-      result = await db('CUSTOMER')
-        .where('CUSTOMERID', customerId)
-        .update({
-          FIRSTNAME: customerData.firstName,
-          LASTNAME: customerData.lastName,
-          COMPANY: customerData.company || null,
-          ADDRESS: customerData.address || null,
-          CITY: customerData.city || null,
-          STATE: customerData.state || null,
-          COUNTRY: customerData.country || null,
-          POSTALCODE: customerData.postalCode || null,
-          PHONE: customerData.phone || null,
-          FAX: customerData.fax || null,
-          EMAIL: customerData.email,
-          SUPPORTREPID: customerData.supportRepId || null
-        });
+      // Oracle - only update fields that are provided
+      const updateData = {};
+      if (customerData.firstName !== undefined) updateData.FIRSTNAME = customerData.firstName;
+      if (customerData.lastName !== undefined) updateData.LASTNAME = customerData.lastName;
+      if (customerData.email !== undefined) updateData.EMAIL = customerData.email;
+      if (customerData.company !== undefined) updateData.COMPANY = customerData.company || null;
+      if (customerData.address !== undefined) updateData.ADDRESS = customerData.address || null;
+      if (customerData.city !== undefined) updateData.CITY = customerData.city || null;
+      if (customerData.state !== undefined) updateData.STATE = customerData.state || null;
+      if (customerData.country !== undefined) updateData.COUNTRY = customerData.country || null;
+      if (customerData.postalCode !== undefined) updateData.POSTALCODE = customerData.postalCode || null;
+      if (customerData.phone !== undefined) updateData.PHONE = customerData.phone || null;
+      if (customerData.fax !== undefined) updateData.FAX = customerData.fax || null;
+      if (customerData.supportRepId !== undefined) updateData.SUPPORTREPID = customerData.supportRepId || null;
+      
+      console.log(`🔧 Oracle update data:`, updateData);
+      result = await db('CUSTOMER').where('CUSTOMERID', customerId).update(updateData);
     } else {
-      // SQL Server and MySQL
-      result = await db(tableName)
-        .where('CustomerId', customerId)
-        .update({
-          FirstName: customerData.firstName,
-          LastName: customerData.lastName,
-          Company: customerData.company || null,
-          Address: customerData.address || null,
-          City: customerData.city || null,
-          State: customerData.state || null,
-          Country: customerData.country || null,
-          PostalCode: customerData.postalCode || null,
-          Phone: customerData.phone || null,
-          Fax: customerData.fax || null,
-          Email: customerData.email,
-          SupportRepId: customerData.supportRepId || null
-        });
+      // SQL Server and MySQL - only update fields that are provided
+      const updateData = {};
+      if (customerData.firstName !== undefined) updateData.FirstName = customerData.firstName;
+      if (customerData.lastName !== undefined) updateData.LastName = customerData.lastName;
+      if (customerData.email !== undefined) updateData.Email = customerData.email;
+      if (customerData.company !== undefined) updateData.Company = customerData.company || null;
+      if (customerData.address !== undefined) updateData.Address = customerData.address || null;
+      if (customerData.city !== undefined) updateData.City = customerData.city || null;
+      if (customerData.state !== undefined) updateData.State = customerData.state || null;
+      if (customerData.country !== undefined) updateData.Country = customerData.country || null;
+      if (customerData.postalCode !== undefined) updateData.PostalCode = customerData.postalCode || null;
+      if (customerData.phone !== undefined) updateData.Phone = customerData.phone || null;
+      if (customerData.fax !== undefined) updateData.Fax = customerData.fax || null;
+      if (customerData.supportRepId !== undefined) updateData.SupportRepId = customerData.supportRepId || null;
+      
+      console.log(`🔧 SQL Server/MySQL update data:`, updateData);
+      result = await db(tableName).where('CustomerId', customerId).update(updateData);
     }
     
     const timeMs = Date.now() - start;
