@@ -2621,10 +2621,33 @@ app.put('/api/customers/:id', async (req, res) => {
   const start = Date.now();
   try {
     const customerId = req.params.id;
-    const { firstName, lastName, company, address, city, state, country, postalCode, phone, fax, email, supportRepId } = req.body;
+    const { 
+      FirstName, LastName, Company, Address, City, State, Country, 
+      PostalCode, Phone, Fax, Email, SupportRepId,
+      // Also support lowercase for backward compatibility
+      firstName, lastName, company, address, city, state, country, 
+      postalCode, phone, fax, email, supportRepId 
+    } = req.body;
+    
+    // Use uppercase field names first, fall back to lowercase
+    const customerData = {
+      firstName: FirstName || firstName,
+      lastName: LastName || lastName,
+      company: Company || company,
+      address: Address || address,
+      city: City || city,
+      state: State || state,
+      country: Country || country,
+      postalCode: PostalCode || postalCode,
+      phone: Phone || phone,
+      fax: Fax || fax,
+      email: Email || email,
+      supportRepId: SupportRepId || supportRepId
+    };
     
     console.log(`➡️ Updating customer ${customerId} via connection: ${req.query.conn}`);
     console.log(`📝 Update data:`, req.body);
+    console.log(`📝 Processed data:`, customerData);
     
     const tableName = getTableName('Customer', req.query.conn);
     const currentConnections = getConnections();
@@ -2636,54 +2659,54 @@ app.put('/api/customers/:id', async (req, res) => {
       result = await db(tableName)
         .where('customer_id', customerId)
         .update({
-          first_name: firstName,
-          last_name: lastName,
-          company: company || null,
-          address: address || null,
-          city: city || null,
-          state: state || null,
-          country: country || null,
-          postal_code: postalCode || null,
-          phone: phone || null,
-          fax: fax || null,
-          email: email,
-          support_rep_id: supportRepId || null
+          first_name: customerData.firstName,
+          last_name: customerData.lastName,
+          company: customerData.company || null,
+          address: customerData.address || null,
+          city: customerData.city || null,
+          state: customerData.state || null,
+          country: customerData.country || null,
+          postal_code: customerData.postalCode || null,
+          phone: customerData.phone || null,
+          fax: customerData.fax || null,
+          email: customerData.email,
+          support_rep_id: customerData.supportRepId || null
         });
     } else if (config.client === 'oracledb') {
       // Oracle
       result = await db('CUSTOMER')
         .where('CUSTOMERID', customerId)
         .update({
-          FIRSTNAME: firstName,
-          LASTNAME: lastName,
-          COMPANY: company || null,
-          ADDRESS: address || null,
-          CITY: city || null,
-          STATE: state || null,
-          COUNTRY: country || null,
-          POSTALCODE: postalCode || null,
-          PHONE: phone || null,
-          FAX: fax || null,
-          EMAIL: email,
-          SUPPORTREPID: supportRepId || null
+          FIRSTNAME: customerData.firstName,
+          LASTNAME: customerData.lastName,
+          COMPANY: customerData.company || null,
+          ADDRESS: customerData.address || null,
+          CITY: customerData.city || null,
+          STATE: customerData.state || null,
+          COUNTRY: customerData.country || null,
+          POSTALCODE: customerData.postalCode || null,
+          PHONE: customerData.phone || null,
+          FAX: customerData.fax || null,
+          EMAIL: customerData.email,
+          SUPPORTREPID: customerData.supportRepId || null
         });
     } else {
       // SQL Server and MySQL
       result = await db(tableName)
         .where('CustomerId', customerId)
         .update({
-          FirstName: firstName,
-          LastName: lastName,
-          Company: company || null,
-          Address: address || null,
-          City: city || null,
-          State: state || null,
-          Country: country || null,
-          PostalCode: postalCode || null,
-          Phone: phone || null,
-          Fax: fax || null,
-          Email: email,
-          SupportRepId: supportRepId || null
+          FirstName: customerData.firstName,
+          LastName: customerData.lastName,
+          Company: customerData.company || null,
+          Address: customerData.address || null,
+          City: customerData.city || null,
+          State: customerData.state || null,
+          Country: customerData.country || null,
+          PostalCode: customerData.postalCode || null,
+          Phone: customerData.phone || null,
+          Fax: customerData.fax || null,
+          Email: customerData.email,
+          SupportRepId: customerData.supportRepId || null
         });
     }
     
@@ -2696,7 +2719,7 @@ app.put('/api/customers/:id', async (req, res) => {
     }
     
     console.log(`✅ Customer ${customerId} updated successfully in ${timeMs}ms`);
-    logToFile(`✅ Customer updated: ${customerId} (${email}) in ${timeMs}ms (conn: ${req.query.conn})`);
+    logToFile(`✅ Customer updated: ${customerId} (${customerData.email}) in ${timeMs}ms (conn: ${req.query.conn})`);
     
     res.json({ 
       success: true, 

@@ -198,28 +198,37 @@ const Invoices: React.FC = () => {
   const searchTracks = useCallback(async (searchTerm: string) => {
     if (!activeConnection?.name || !searchTerm.trim()) return;
 
+    console.log(`🔍 Searching tracks for: "${searchTerm}" on connection: ${activeConnection.name}`);
+
     try {
       const params = new URLSearchParams({
         conn: activeConnection.name,
-        searchValue: searchTerm,
-        searchColumn: 'Name',
+        search: searchTerm,
         limit: '20',
         offset: '0'
       });
 
+      console.log(`🔍 Track search URL: http://localhost:3001/api/tracks?${params}`);
+
       const response = await fetch(`http://localhost:3001/api/tracks?${params}`);
       if (response.ok) {
         const data = await response.json();
-        if (Array.isArray(data)) {
-          const tracksData = data.map((track: any) => ({
+        console.log(`🔍 Track search response:`, data);
+        if (data.tracks && Array.isArray(data.tracks)) {
+          const tracksData = data.tracks.map((track: any) => ({
             TrackId: track.TrackId || track.trackid || track.TRACKID || track.track_id,
             Name: track.Name || track.name || track.NAME || track.track_name || '',
             UnitPrice: track.UnitPrice || track.unitprice || track.UNITPRICE || track.unit_price || 0,
             ArtistName: track.ArtistName || track.artistname || track.ARTISTNAME || track.artist_name || 'Unknown Artist',
             AlbumTitle: track.AlbumTitle || track.albumtitle || track.ALBUMTITLE || track.album_title || 'Unknown Album'
           }));
+          console.log(`🔍 Setting ${tracksData.length} tracks:`, tracksData.slice(0, 3));
           setTracks(tracksData);
+        } else {
+          console.log(`🔍 No tracks found in response data`);
         }
+      } else {
+        console.error(`🔍 Track search failed with status: ${response.status}`);
       }
     } catch (error) {
       console.error('Failed to search tracks:', error);
@@ -230,6 +239,8 @@ const Invoices: React.FC = () => {
   const fetchPopularTracks = useCallback(async () => {
     if (!activeConnection?.name) return;
 
+    console.log(`🎵 Fetching popular tracks on connection: ${activeConnection.name}`);
+
     try {
       const params = new URLSearchParams({
         conn: activeConnection.name,
@@ -237,19 +248,27 @@ const Invoices: React.FC = () => {
         offset: '0'
       });
 
+      console.log(`🎵 Popular tracks URL: http://localhost:3001/api/tracks?${params}`);
+
       const response = await fetch(`http://localhost:3001/api/tracks?${params}`);
       if (response.ok) {
         const data = await response.json();
-        if (Array.isArray(data)) {
-          const tracksData = data.map((track: any) => ({
+        console.log(`🎵 Popular tracks response:`, data);
+        if (data.tracks && Array.isArray(data.tracks)) {
+          const tracksData = data.tracks.map((track: any) => ({
             TrackId: track.TrackId || track.trackid || track.TRACKID || track.track_id,
             Name: track.Name || track.name || track.NAME || track.track_name || '',
             UnitPrice: track.UnitPrice || track.unitprice || track.UNITPRICE || track.unit_price || 0,
             ArtistName: track.ArtistName || track.artistname || track.ARTISTNAME || track.artist_name || 'Unknown Artist',
             AlbumTitle: track.AlbumTitle || track.albumtitle || track.ALBUMTITLE || track.album_title || 'Unknown Album'
           }));
+          console.log(`🎵 Setting ${tracksData.length} popular tracks:`, tracksData.slice(0, 3));
           setPopularTracks(tracksData);
+        } else {
+          console.log(`🎵 No tracks found in popular tracks response data`);
         }
+      } else {
+        console.error(`🎵 Popular tracks fetch failed with status: ${response.status}`);
       }
     } catch (error) {
       console.error('Failed to fetch popular tracks:', error);
