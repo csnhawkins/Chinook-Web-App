@@ -362,6 +362,146 @@ app.use((req, res, next) => {
 // --- Customers endpoint ---
 
 // --- Invoices endpoint ---
+app.get('/api/invoices', async (req, res) => {
+  const conn = req.query.conn || defaultConnection;
+  const db = getDb(conn);
+  const currentConnections = getConnections();
+  const config = currentConnections[conn] || currentConnections[defaultConnection];
+  const dbType = config.client;
+
+  // Get table names for current database
+  const invoiceTable = getTableName('Invoice', conn);
+  const customerTable = getTableName('Customer', conn);
+
+  // Search/filter params
+  const search = req.query.search || '';
+  const searchColumn = req.query.searchColumn || '';
+  const exactMatch = req.query.exactMatch == '1';
+  const limit = parseInt(req.query.limit) || 50;
+  const offset = parseInt(req.query.offset) || 0;
+
+  console.log(`📋 Invoices query: offset=${offset}, limit=${limit}, search="${search}", conn=${conn}`);
+
+  try {
+    // Get column names for current database type
+    const invoiceIdCol = getColName('InvoiceId', conn);
+    const customerIdCol = getColName('CustomerId', conn);
+    const invoiceDateCol = getColName('InvoiceDate', conn);
+    const billingAddressCol = getColName('BillingAddress', conn);
+    const billingCityCol = getColName('BillingCity', conn);
+    const billingStateCol = getColName('BillingState', conn);
+    const billingCountryCol = getColName('BillingCountry', conn);
+    const billingPostalCodeCol = getColName('BillingPostalCode', conn);
+    const totalCol = getColName('Total', conn);
+    const firstNameCol = getColName('FirstName', conn);
+    const lastNameCol = getColName('LastName', conn);
+    const emailCol = getColName('Email', conn);
+
+    console.log(`🔍 Invoice columns - Table: ${invoiceTable}, Customer: ${customerTable}, DB Type: ${dbType}`);
+
+    // Build query with proper joins for all database types
+    let query = db(`${invoiceTable} as i`)
+      .leftJoin(`${customerTable} as c`, `i.${customerIdCol}`, `c.${customerIdCol}`)
+      .select([
+        `i.${invoiceIdCol} as InvoiceId`,
+        `i.${customerIdCol} as CustomerId`,
+        `i.${invoiceDateCol} as InvoiceDate`,
+        `i.${billingAddressCol} as BillingAddress`,
+        `i.${billingCityCol} as BillingCity`,
+        `i.${billingStateCol} as BillingState`,
+        `i.${billingCountryCol} as BillingCountry`,
+        `i.${billingPostalCodeCol} as BillingPostalCode`,
+        `i.${totalCol} as Total`,
+        `c.${firstNameCol} as CustomerFirstName`,
+        `c.${lastNameCol} as CustomerLastName`,
+        `c.${emailCol} as CustomerEmail`
+      ]);
+
+    // Build count query
+    let countQuery = db(`${invoiceTable} as i`)
+      .leftJoin(`${customerTable} as c`, `i.${customerIdCol}`, `c.${customerIdCol}`)
+      .count('* as total');
+
+    // Apply search filters
+    if (search && search.length >= 2) {
+      const searchFilter = function() {
+        // Search invoice fields
+        if (dbType === 'pg') {
+          this.whereRaw(`LOWER(i.${invoiceIdCol}::text) LIKE ?`, [`%${search.toLowerCase()}%`])
+            .orWhereRaw(`LOWER(i.${totalCol}::text) LIKE ?`, [`%${search.toLowerCase()}%`])
+            .orWhereRaw(`LOWER(i.${billingCityCol}) LIKE ?`, [`%${search.toLowerCase()}%`])
+            .orWhereRaw(`LOWER(i.${billingCountryCol}) LIKE ?`, [`%${search.toLowerCase()}%`])
+            .orWhereRaw(`LOWER(c.${firstNameCol}) LIKE ?`, [`%${search.toLowerCase()}%`])
+            .orWhereRaw(`LOWER(c.${lastNameCol}) LIKE ?`, [`%${search.toLowerCase()}%`])
+            .orWhereRaw(`LOWER(c.${emailCol}) LIKE ?`, [`%${search.toLowerCase()}%`]);
+        } else if (dbType === 'oracledb') {
+          this.whereRaw(`LOWER(TO_CHAR(i.${invoiceIdCol})) LIKE ?`, [`%${search.toLowerCase()}%`])
+            .orWhereRaw(`LOWER(TO_CHAR(i.${totalCol})) LIKE ?`, [`%${search.toLowerCase()}%`])
+            .orWhereRaw(`LOWER(i.${billingCityCol}) LIKE ?`, [`%${search.toLowerCase()}%`])
+            .orWhereRaw(`LOWER(i.${billingCountryCol}) LIKE ?`, [`%${search.toLowerCase()}%`])
+            .orWhereRaw(`LOWER(c.${firstNameCol}) LIKE ?`, [`%${search.toLowerCase()}%`])
+            .orWhereRaw(`LOWER(c.${lastNameCol}) LIKE ?`, [`%${search.toLowerCase()}%`])
+            .orWhereRaw(`LOWER(c.${emailCol}) LIKE ?`, [`%${search.toLowerCase()}%`]);
+        } else {
+          this.whereRaw(`LOWER(CAST(i.${invoiceIdCol} AS VARCHAR)) LIKE ?`, [`%${search.toLowerCase()}%`])
+            .orWhereRaw(`LOWER(CAST(i.${totalCol} AS VARCHAR)) LIKE ?`, [`%${search.toLowerCase()}%`])
+            .orWhereRaw(`LOWER(i.${billingCityCol}) LIKE ?`, [`%${search.toLowerCase()}%`])
+            .orWhereRaw(`LOWER(i.${billingCountryCol}) LIKE ?`, [`%${search.toLowerCase()}%`])
+            .orWhereRaw(`LOWER(c.${firstNameCol}) LIKE ?`, [`%${search.toLowerCase()}%`])
+            .orWhereRaw(`LOWER(c.${lastNameCol}) LIKE ?`, [`%${search.toLowerCase()}%`])
+            .orWhereRaw(`LOWER(c.${emailCol}) LIKE ?`, [`%${search.toLowerCase()}%`]);
+        }
+      };
+
+      query = query.where(searchFilter);
+      countQuery = countQuery.where(searchFilter);
+    }
+
+    // Apply pagination and ordering
+    query = query.orderBy(`i.${invoiceIdCol}`, 'desc').limit(limit).offset(offset);
+
+    console.log(`🔍 Invoice SQL: ${query.toString()}`);
+
+    const start = Date.now();
+    const [rows, countRes] = await Promise.all([query, countQuery]);
+    const timeMs = Date.now() - start;
+
+    // Get total count
+    let totalRows = 0;
+    if (Array.isArray(countRes)) {
+      totalRows = parseInt(countRes[0]?.total || countRes[0]?.TOTAL || 0, 10);
+    } else {
+      totalRows = parseInt(countRes?.total || countRes?.TOTAL || 0, 10);
+    }
+
+    // Format the results with customer names
+    const formattedInvoices = rows.map(row => ({
+      InvoiceId: row.InvoiceId || row.INVOICEID,
+      CustomerId: row.CustomerId || row.CUSTOMERID, 
+      InvoiceDate: row.InvoiceDate || row.INVOICEDATE,
+      BillingAddress: row.BillingAddress || row.BILLINGADDRESS,
+      BillingCity: row.BillingCity || row.BILLINGCITY,
+      BillingState: row.BillingState || row.BILLINGSTATE,
+      BillingCountry: row.BillingCountry || row.BILLINGCOUNTRY,
+      BillingPostalCode: row.BillingPostalCode || row.BILLINGPOSTALCODE,
+      Total: row.Total || row.TOTAL,
+      CustomerName: `${row.CustomerFirstName || row.CUSTOMERFIRSTNAME || ''} ${row.CustomerLastName || row.CUSTOMERLASTNAME || ''}`.trim() || 'Unknown Customer',
+      CustomerEmail: row.CustomerEmail || row.CUSTOMEREMAIL
+    }));
+
+    console.log(`✅ Invoices query OK: ${formattedInvoices.length} rows of ${totalRows} in ${timeMs}ms (conn: ${conn})`);
+    res.json({ 
+      rows: formattedInvoices, 
+      rowCount: formattedInvoices.length, 
+      totalRows, 
+      timeMs 
+    });
+
+  } catch (err) {
+    console.error(`❌ Invoices query error:`, err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // --- Employees endpoint ---
 
@@ -844,43 +984,121 @@ app.get("/api/report/invoice/:invoiceId", async (req, res) => {
         tracks = tracks.recordset || tracks.rows || tracks;
       }
     } else {
-      // Normal efficient query
+      // Normal efficient query with complete track details including Album and Artist
       executionMethod = 'standard';
-      executionDetails = 'Optimized JOIN Query';
+      executionDetails = 'Optimized JOIN Query with Album/Artist';
       
-      tracks = await db(invoiceLineTable)
-        .join(trackTable, `${invoiceLineTable}.${getColName('TrackId', req.query.conn)}`, `${trackTable}.${getColName('TrackId', req.query.conn)}`)
-        .select(
-          `${trackTable}.${getColName('TrackId', req.query.conn)}`,
-          `${trackTable}.${getColName('Name', req.query.conn)} as TrackName`,
-          `${trackTable}.${getColName('Composer', req.query.conn)}`,
-          `${trackTable}.${getColName('GenreId', req.query.conn)}`,
-          `${trackTable}.${getColName('Milliseconds', req.query.conn)}`,
-          `${invoiceLineTable}.${getColName('UnitPrice', req.query.conn)}`,
-          `${invoiceLineTable}.${getColName('Quantity', req.query.conn)}`
-        )
-        .where({ [`${invoiceLineTable}.${getColName('InvoiceId', req.query.conn)}`]: invoiceId });
+      // Get additional table names
+      const albumTable = getTableName("Album", req.query.conn);
+      const artistTable = getTableName("Artist", req.query.conn);
+      
+      // Build comprehensive query with all related data
+      tracks = await db(`${invoiceLineTable} as il`)
+        .join(`${trackTable} as t`, `il.${getColName('TrackId', req.query.conn)}`, `t.${getColName('TrackId', req.query.conn)}`)
+        .leftJoin(`${albumTable} as al`, `t.${getColName('AlbumId', req.query.conn)}`, `al.${getColName('AlbumId', req.query.conn)}`)
+        .leftJoin(`${artistTable} as ar`, `al.${getColName('ArtistId', req.query.conn)}`, `ar.${getColName('ArtistId', req.query.conn)}`)
+        .select([
+          `t.${getColName('TrackId', req.query.conn)} as TrackId`,
+          `t.${getColName('Name', req.query.conn)} as TrackName`,
+          `t.${getColName('Composer', req.query.conn)} as Composer`,
+          `t.${getColName('GenreId', req.query.conn)} as GenreId`,
+          `t.${getColName('Milliseconds', req.query.conn)} as Milliseconds`,
+          `il.${getColName('UnitPrice', req.query.conn)} as UnitPrice`,
+          `il.${getColName('Quantity', req.query.conn)} as Quantity`,
+          `al.${getColName('Title', req.query.conn)} as AlbumTitle`,
+          `ar.${getColName('Name', req.query.conn)} as ArtistName`
+        ])
+        .where(`il.${getColName('InvoiceId', req.query.conn)}`, invoiceId)
+        .orderBy(`t.${getColName('TrackId', req.query.conn)}`);
+        
+      console.log(`🎵 Track query SQL: ${tracks.toString()}`);
     }
 
     const timeMs = Date.now() - start;
     console.log(`📊 DEBUG: Invoice report ${invoiceId} timing - start: ${start}, end: ${Date.now()}, duration: ${timeMs}ms`);
     logToFile(`📊 Invoice report ${invoiceId} completed in ${timeMs}ms (${req.query.conn})`);
 
+    // Get database type for normalization
+    const currentConnections = getConnections();
+    const config = currentConnections[req.query.conn] || currentConnections[defaultConnection];
+    const dbType = config.client;
+
+    // Normalize invoice data
+    const normalizedInvoice = {
+      InvoiceId: invoice[getColName('InvoiceId', req.query.conn)],
+      CustomerId: invoice[getColName('CustomerId', req.query.conn)],
+      InvoiceDate: invoice[getColName('InvoiceDate', req.query.conn)],
+      BillingAddress: invoice[getColName('BillingAddress', req.query.conn)],
+      BillingCity: invoice[getColName('BillingCity', req.query.conn)],
+      BillingState: invoice[getColName('BillingState', req.query.conn)],
+      BillingCountry: invoice[getColName('BillingCountry', req.query.conn)],
+      BillingPostalCode: invoice[getColName('BillingPostalCode', req.query.conn)],
+      Total: invoice[getColName('Total', req.query.conn)]
+    };
+
+    // Normalize customer data  
+    const normalizedCustomer = {
+      CustomerId: customer[getColName('CustomerId', req.query.conn)],
+      FirstName: customer[getColName('FirstName', req.query.conn)],
+      LastName: customer[getColName('LastName', req.query.conn)],
+      Email: customer[getColName('Email', req.query.conn)],
+      Address: customer[getColName('Address', req.query.conn)],
+      City: customer[getColName('City', req.query.conn)],
+      State: customer[getColName('State', req.query.conn)],
+      Country: customer[getColName('Country', req.query.conn)],
+      PostalCode: customer[getColName('PostalCode', req.query.conn)],
+      Phone: customer[getColName('Phone', req.query.conn)],
+      Fax: customer[getColName('Fax', req.query.conn)]
+    };
+
+    // Normalize tracks data for different database types
+    let normalizedTracks = tracks;
+    if (Array.isArray(tracks)) {
+      normalizedTracks = tracks.map(track => {
+        if (dbType === 'oracledb') {
+          // Oracle returns UPPERCASE column names
+          return {
+            TrackId: track.TRACKID || track.TrackId,
+            TrackName: track.TRACKNAME || track.TrackName,
+            Composer: track.COMPOSER || track.Composer,
+            GenreId: track.GENREID || track.GenreId,
+            Milliseconds: track.MILLISECONDS || track.Milliseconds,
+            UnitPrice: track.UNITPRICE || track.UnitPrice,
+            Quantity: track.QUANTITY || track.Quantity,
+            AlbumTitle: track.ALBUMTITLE || track.AlbumTitle,
+            ArtistName: track.ARTISTNAME || track.ArtistName
+          };
+        } else if (dbType === 'pg') {
+          // PostgreSQL might return snake_case, but our query uses aliases so should be PascalCase
+          return {
+            TrackId: track.trackid || track.TrackId,
+            TrackName: track.trackname || track.TrackName,
+            Composer: track.composer || track.Composer,
+            GenreId: track.genreid || track.GenreId,
+            Milliseconds: track.milliseconds || track.Milliseconds,
+            UnitPrice: track.unitprice || track.UnitPrice,
+            Quantity: track.quantity || track.Quantity,
+            AlbumTitle: track.albumtitle || track.AlbumTitle,
+            ArtistName: track.artistname || track.ArtistName
+          };
+        } else {
+          // SQL Server and MySQL should already have proper casing
+          return track;
+        }
+      });
+    }
+
     // Structure the report
     const report = {
-      invoice,
-      customer: {
-        CustomerId: customer[getColName('CustomerId', req.query.conn)],
-        FirstName: customer[getColName('FirstName', req.query.conn)],
-        LastName: customer[getColName('LastName', req.query.conn)],
-        Email: customer[getColName('Email', req.query.conn)],
-        Country: customer[getColName('Country', req.query.conn)]
-      },
-      tracks,
+      invoice: normalizedInvoice,
+      customer: normalizedCustomer,
+      tracks: normalizedTracks,
       timeMs: timeMs,
       executionMethod: executionMethod,
       executionDetails: executionDetails
     };
+    
+    console.log(`✅ Invoice report ${invoiceId} completed: ${normalizedTracks.length} tracks, ${timeMs}ms`);
     res.json(report);
   } catch (err) {
     const timeMs = Date.now() - start;
@@ -1427,6 +1645,9 @@ app.get('/api/tracks', async (req, res) => {
     const albumTitleCol = getColName('Title', conn);
     const artistNameCol = getColName('Name', conn);
     
+    console.log(`🔧 Track query - DB: ${dbType}, Tables: Track=${trackTable}, Album=${albumTable}, Artist=${artistTable}`);
+    console.log(`🔧 Track columns: TrackId=${trackIdCol}, Name=${trackNameCol}, UnitPrice=${unitPriceCol}, AlbumId=${albumIdCol}`);
+    
     // Build query with joins to get artist and album info
     if (dbType === 'pg') {
       // PostgreSQL
@@ -1441,11 +1662,17 @@ app.get('/api/tracks', async (req, res) => {
         .leftJoin(`${albumTable} as al`, `t.${albumIdCol}`, `al.${albumIdCol}`)
         .leftJoin(`${artistTable} as ar`, `al.${artistIdCol}`, `ar.${artistIdCol}`);
     } else if (dbType === 'oracledb') {
-      // Oracle
+      // Oracle - Use proper column mappings
       query = db(`${trackTable} t`)
-        .select('t.TRACKID as TrackId', 't.NAME as Name', 't.UNITPRICE as UnitPrice', 'ar.NAME as ArtistName', 'al.TITLE as AlbumTitle')
-        .leftJoin(`${albumTable} al`, 't.ALBUMID', 'al.ALBUMID')
-        .leftJoin(`${artistTable} ar`, 'al.ARTISTID', 'ar.ARTISTID');
+        .select(
+          `t.${trackIdCol} as TrackId`, 
+          `t.${trackNameCol} as Name`, 
+          `t.${unitPriceCol} as UnitPrice`, 
+          `ar.${artistNameCol} as ArtistName`, 
+          `al.${albumTitleCol} as AlbumTitle`
+        )
+        .leftJoin(`${albumTable} al`, `t.${albumIdCol}`, `al.${albumIdCol}`)
+        .leftJoin(`${artistTable} ar`, `al.${artistIdCol}`, `ar.${artistIdCol}`);
     } else if (dbType === 'mysql') {
       // MySQL
       query = db(`${trackTable} as t`)
@@ -1468,9 +1695,9 @@ app.get('/api/tracks', async (req, res) => {
             .orWhereRaw(`LOWER(ar.${artistNameCol}) LIKE ?`, [`%${search.toLowerCase()}%`])
             .orWhereRaw(`LOWER(al.${albumTitleCol}) LIKE ?`, [`%${search.toLowerCase()}%`]);
         } else if (dbType === 'oracledb') {
-          this.whereRaw(`LOWER(t.NAME) LIKE ?`, [`%${search.toLowerCase()}%`])
-            .orWhereRaw(`LOWER(ar.NAME) LIKE ?`, [`%${search.toLowerCase()}%`])
-            .orWhereRaw(`LOWER(al.TITLE) LIKE ?`, [`%${search.toLowerCase()}%`]);
+          this.whereRaw(`LOWER(t.${trackNameCol}) LIKE ?`, [`%${search.toLowerCase()}%`])
+            .orWhereRaw(`LOWER(ar.${artistNameCol}) LIKE ?`, [`%${search.toLowerCase()}%`])
+            .orWhereRaw(`LOWER(al.${albumTitleCol}) LIKE ?`, [`%${search.toLowerCase()}%`]);
         } else {
           this.whereRaw(`LOWER(t.Name) LIKE ?`, [`%${search.toLowerCase()}%`])
             .orWhereRaw(`LOWER(ar.Name) LIKE ?`, [`%${search.toLowerCase()}%`])
@@ -1480,9 +1707,16 @@ app.get('/api/tracks', async (req, res) => {
     }
     
     // Get total count for pagination (before applying limit/offset)
-    let totalQuery = db(`${trackTable} as t`)
-      .leftJoin(`${albumTable} as al`, `t.${albumIdCol}`, `al.${albumIdCol}`)
-      .leftJoin(`${artistTable} as ar`, `al.${artistIdCol}`, `ar.${artistIdCol}`);
+    let totalQuery;
+    if (dbType === 'oracledb') {
+      totalQuery = db(`${trackTable} t`)
+        .leftJoin(`${albumTable} al`, `t.${albumIdCol}`, `al.${albumIdCol}`)
+        .leftJoin(`${artistTable} ar`, `al.${artistIdCol}`, `ar.${artistIdCol}`);
+    } else {
+      totalQuery = db(`${trackTable} as t`)
+        .leftJoin(`${albumTable} as al`, `t.${albumIdCol}`, `al.${albumIdCol}`)
+        .leftJoin(`${artistTable} as ar`, `al.${artistIdCol}`, `ar.${artistIdCol}`);
+    }
       
     if (search && search.length >= 2) {
       totalQuery = totalQuery.where(function() {
@@ -1491,9 +1725,9 @@ app.get('/api/tracks', async (req, res) => {
             .orWhereRaw(`LOWER(ar.${artistNameCol}) LIKE ?`, [`%${search.toLowerCase()}%`])
             .orWhereRaw(`LOWER(al.${albumTitleCol}) LIKE ?`, [`%${search.toLowerCase()}%`]);
         } else if (dbType === 'oracledb') {
-          this.whereRaw(`LOWER(t.NAME) LIKE ?`, [`%${search.toLowerCase()}%`])
-            .orWhereRaw(`LOWER(ar.NAME) LIKE ?`, [`%${search.toLowerCase()}%`])
-            .orWhereRaw(`LOWER(al.TITLE) LIKE ?`, [`%${search.toLowerCase()}%`]);
+          this.whereRaw(`LOWER(t.${trackNameCol}) LIKE ?`, [`%${search.toLowerCase()}%`])
+            .orWhereRaw(`LOWER(ar.${artistNameCol}) LIKE ?`, [`%${search.toLowerCase()}%`])
+            .orWhereRaw(`LOWER(al.${albumTitleCol}) LIKE ?`, [`%${search.toLowerCase()}%`]);
         } else {
           this.whereRaw(`LOWER(t.Name) LIKE ?`, [`%${search.toLowerCase()}%`])
             .orWhereRaw(`LOWER(ar.Name) LIKE ?`, [`%${search.toLowerCase()}%`])

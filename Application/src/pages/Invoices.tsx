@@ -134,7 +134,7 @@ const Invoices: React.FC = () => {
         params.append('exactMatch', '1');
       }
 
-      const response = await fetch(`http://localhost:3001/api/table/Invoice?${params}`);
+      const response = await fetch(`http://localhost:3001/api/invoices?${params}`);
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: Failed to fetch invoices`);
       }
@@ -147,70 +147,8 @@ const Invoices: React.FC = () => {
 
       const invoicesData = data.rows || [];
       
-      // Normalize invoice data to handle different database schemas
-      const normalizedInvoices = invoicesData.map((invoice: any) => ({
-        InvoiceId: invoice.InvoiceId || invoice.invoiceid || invoice.INVOICEID || invoice.invoice_id,
-        CustomerId: invoice.CustomerId || invoice.customerid || invoice.CUSTOMERID || invoice.customer_id,
-        InvoiceDate: invoice.InvoiceDate || invoice.invoicedate || invoice.INVOICEDATE || invoice.invoice_date,
-        BillingAddress: invoice.BillingAddress || invoice.billingaddress || invoice.BILLINGADDRESS || invoice.billing_address,
-        BillingCity: invoice.BillingCity || invoice.billingcity || invoice.BILLINGCITY || invoice.billing_city,
-        BillingState: invoice.BillingState || invoice.billingstate || invoice.BILLINGSTATE || invoice.billing_state,
-        BillingCountry: invoice.BillingCountry || invoice.billingcountry || invoice.BILLINGCOUNTRY || invoice.billing_country,
-        BillingPostalCode: invoice.BillingPostalCode || invoice.billingpostalcode || invoice.BILLINGPOSTALCODE || invoice.billing_postal_code,
-        Total: invoice.Total || invoice.total || invoice.TOTAL || 0
-      }));
-      
-      // If we have invoices, fetch customer names
-      if (normalizedInvoices.length > 0) {
-        try {
-          // Get unique customer IDs
-          const customerIds = [...new Set(normalizedInvoices.map((invoice: any) => invoice.CustomerId).filter(Boolean))];
-          
-          if (customerIds.length > 0) {
-            // Fetch customer data
-            const customerParams = new URLSearchParams({
-              conn: activeConnection.name,
-              limit: '1000', // Get all customers we need
-              offset: '0'
-            });
-            
-            const customerResponse = await fetch(`http://localhost:3001/api/table/Customer?${customerParams}`);
-            if (customerResponse.ok) {
-              const customerData = await customerResponse.json();
-              const customerMap = new Map();
-              
-              if (customerData.rows) {
-                customerData.rows.forEach((customer: any) => {
-                  const customerId = customer.CustomerId || customer.customerid || customer.CUSTOMERID || customer.customer_id;
-                  const firstName = customer.FirstName || customer.firstname || customer.FIRSTNAME || customer.first_name;
-                  const lastName = customer.LastName || customer.lastname || customer.LASTNAME || customer.last_name;
-                  const fullName = `${firstName} ${lastName}`.trim();
-                  customerMap.set(customerId, fullName || 'Unknown Customer');
-                });
-              }
-              
-              // Add customer names to invoices
-              const enrichedInvoices = normalizedInvoices.map((invoice: any) => ({
-                ...invoice,
-                CustomerName: customerMap.get(invoice.CustomerId) || 'Unknown Customer'
-              }));
-              
-              setInvoices(enrichedInvoices);
-            } else {
-              // If customer fetch fails, use invoices without customer names
-              setInvoices(normalizedInvoices);
-            }
-          } else {
-            setInvoices(normalizedInvoices);
-          }
-        } catch (customerError) {
-          console.warn('Failed to fetch customer names:', customerError);
-          setInvoices(normalizedInvoices);
-        }
-      } else {
-        setInvoices([]);
-      }
-      
+      // The new /api/invoices endpoint already includes customer names and normalized data
+      setInvoices(invoicesData);
       setTotalRows(data.totalRows || 0);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load invoices');
@@ -226,7 +164,7 @@ const Invoices: React.FC = () => {
 
     try {
       const params = new URLSearchParams({
-        environment: activeConnection.name,
+        conn: activeConnection.name,
         limit: '1000',
         offset: '0'
       });
@@ -262,7 +200,7 @@ const Invoices: React.FC = () => {
 
     try {
       const params = new URLSearchParams({
-        environment: activeConnection.name,
+        conn: activeConnection.name,
         searchValue: searchTerm,
         searchColumn: 'Name',
         limit: '20',
@@ -294,7 +232,7 @@ const Invoices: React.FC = () => {
 
     try {
       const params = new URLSearchParams({
-        environment: activeConnection.name,
+        conn: activeConnection.name,
         limit: '6',
         offset: '0'
       });
@@ -432,13 +370,13 @@ const Invoices: React.FC = () => {
       console.log('Creating invoice with data:', invoiceData);
 
       // Create the invoice via API call
-      const response = await fetch(`http://localhost:3001/api/invoices`, {
+      const response = await fetch(`http://localhost:3001/api/invoice`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          environment: activeConnection?.name,
+          conn: activeConnection?.name,
           ...invoiceData
         })
       });
