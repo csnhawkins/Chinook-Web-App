@@ -401,7 +401,7 @@ app.get('/api/invoices', async (req, res) => {
 
     // Build query with proper joins for all database types
     let query = db(`${invoiceTable} as i`)
-      .leftJoin(`${customerTable} as c`, `i.${customerIdCol}`, `c.${customerIdCol}`)
+      .leftJoin(`${customerTable} as c`, `i.${customerIdCol}`, `=`, `c.${customerIdCol}`)
       .select([
         `i.${invoiceIdCol} as InvoiceId`,
         `i.${customerIdCol} as CustomerId`,
@@ -419,7 +419,7 @@ app.get('/api/invoices', async (req, res) => {
 
     // Build count query
     let countQuery = db(`${invoiceTable} as i`)
-      .leftJoin(`${customerTable} as c`, `i.${customerIdCol}`, `c.${customerIdCol}`)
+      .leftJoin(`${customerTable} as c`, `i.${customerIdCol}`, `=`, `c.${customerIdCol}`)
       .count('* as total');
 
     // Apply search filters
@@ -532,9 +532,9 @@ app.get('/api/artists', async (req, res) => {
 
     console.log(`🔍 Artist columns - Table: ${artistTable}, Album: ${albumTable}, DB Type: ${dbType}`);
 
-    // Build query with album count
+    // Build query with album count - simpler approach
     let query = db(`${artistTable} as ar`)
-      .leftJoin(`${albumTable} as al`, `ar.${artistIdCol}`, `al.${albumArtistIdCol}`)
+      .leftJoin(`${albumTable} as al`, `ar.${artistIdCol}`, `=`, `al.${albumArtistIdCol}`)
       .select([
         `ar.${artistIdCol} as ArtistId`,
         `ar.${artistNameCol} as Name`,
@@ -573,12 +573,46 @@ app.get('/api/artists', async (req, res) => {
       totalRows = parseInt(countRes?.total || countRes?.TOTAL || 0, 10);
     }
 
+    // Get track counts for the artists
+    const trackTable = getTableName('Track', conn);
+    const albumIdCol = getColName('AlbumId', conn);
+    const trackAlbumIdCol = getColName('AlbumId', conn);
+    
+    const artistIds = rows.map(row => row.ArtistId || row.ARTISTID);
+    let trackCounts = {};
+    
+    if (artistIds.length > 0) {
+      try {
+        const trackCountQuery = db(`${trackTable} as t`)
+          .leftJoin(`${albumTable} as al`, `t.${trackAlbumIdCol}`, `=`, `al.${albumIdCol}`)
+          .select(['al.' + albumArtistIdCol + ' as ArtistId'])
+          .count('* as TrackCount')
+          .whereIn('al.' + albumArtistIdCol, artistIds)
+          .groupBy('al.' + albumArtistIdCol);
+          
+        console.log(`🔍 Track count SQL: ${trackCountQuery.toString()}`);
+        const trackResults = await trackCountQuery;
+        
+        trackResults.forEach(result => {
+          const artistId = result.ArtistId || result.ARTISTID;
+          const trackCount = parseInt(result.TrackCount || result.TRACKCOUNT || 0, 10);
+          trackCounts[artistId] = trackCount;
+        });
+      } catch (err) {
+        console.log(`⚠️ Could not fetch track counts:`, err.message);
+      }
+    }
+
     // Format the results
-    const formattedArtists = rows.map(row => ({
-      ArtistId: row.ArtistId || row.ARTISTID,
-      Name: row.Name || row.NAME,
-      AlbumCount: parseInt(row.AlbumCount || row.ALBUMCOUNT || 0, 10)
-    }));
+    const formattedArtists = rows.map(row => {
+      const artistId = row.ArtistId || row.ARTISTID;
+      return {
+        ArtistId: artistId,
+        Name: row.Name || row.NAME,
+        AlbumCount: parseInt(row.AlbumCount || row.ALBUMCOUNT || 0, 10),
+        TrackCount: trackCounts[artistId] || 0
+      };
+    });
 
     console.log(`✅ Artists query OK: ${formattedArtists.length} rows of ${totalRows} in ${timeMs}ms (conn: ${conn})`);
     res.json({ 
@@ -627,7 +661,7 @@ app.get('/api/albums', async (req, res) => {
 
     // Build query with proper joins for all database types
     let query = db(`${albumTable} as al`)
-      .leftJoin(`${artistTable} as ar`, `al.${albumArtistIdCol}`, `ar.${artistIdCol}`)
+      .leftJoin(`${artistTable} as ar`, `al.${albumArtistIdCol}`, `=`, `ar.${artistIdCol}`)
       .select([
         `al.${albumIdCol} as AlbumId`,
         `al.${albumTitleCol} as Title`,
@@ -637,7 +671,7 @@ app.get('/api/albums', async (req, res) => {
 
     // Build count query
     let countQuery = db(`${albumTable} as al`)
-      .leftJoin(`${artistTable} as ar`, `al.${albumArtistIdCol}`, `ar.${artistIdCol}`)
+      .leftJoin(`${artistTable} as ar`, `al.${albumArtistIdCol}`, `=`, `ar.${artistIdCol}`)
       .count('* as total');
 
     // Apply search filters
@@ -651,8 +685,8 @@ app.get('/api/albums', async (req, res) => {
       countQuery = countQuery.where(searchFilter);
     }
 
-    // Apply pagination and ordering
-    query = query.orderBy(`al.${albumTitleCol}`).limit(limit).offset(offset);
+    // Apply pagination and ordering - order by Artist name first, then Album title
+    query = query.orderBy(`ar.${artistNameCol}`).orderBy(`al.${albumTitleCol}`).limit(limit).offset(offset);
 
     console.log(`🔍 Album SQL: ${query.toString()}`);
 
@@ -1825,6 +1859,7 @@ app.get('/api/tracks', async (req, res) => {
     const trackIdCol = getColName('TrackId', conn);
     const trackNameCol = getColName('Name', conn);
     const unitPriceCol = getColName('UnitPrice', conn);
+    const millisecondsCol = getColName('Milliseconds', conn);
     const trackAlbumIdCol = getColName('AlbumId', conn);
     const albumIdCol = getColName('AlbumId', conn);
     const albumTitleCol = getColName('Title', conn);
@@ -1837,20 +1872,21 @@ app.get('/api/tracks', async (req, res) => {
     
     // Build the main query with proper joins for Oracle
     let query = db(`${trackTable} as t`)
-      .leftJoin(`${albumTable} as al`, `t.${trackAlbumIdCol}`, `al.${albumIdCol}`)
-      .leftJoin(`${artistTable} as ar`, `al.${albumArtistIdCol}`, `ar.${artistIdCol}`)
+      .leftJoin(`${albumTable} as al`, `t.${trackAlbumIdCol}`, `=`, `al.${albumIdCol}`)
+      .leftJoin(`${artistTable} as ar`, `al.${albumArtistIdCol}`, `=`, `ar.${artistIdCol}`)
       .select([
         `t.${trackIdCol} as TrackId`,
         `t.${trackNameCol} as Name`,
         `t.${unitPriceCol} as UnitPrice`,
+        `t.${millisecondsCol} as Milliseconds`,
         `al.${albumTitleCol} as AlbumTitle`,
         `ar.${artistNameCol} as ArtistName`
       ]);
     
     // Build count query with same joins
     let totalQuery = db(`${trackTable} as t`)
-      .leftJoin(`${albumTable} as al`, `t.${trackAlbumIdCol}`, `al.${albumIdCol}`)
-      .leftJoin(`${artistTable} as ar`, `al.${albumArtistIdCol}`, `ar.${artistIdCol}`);
+      .leftJoin(`${albumTable} as al`, `t.${trackAlbumIdCol}`, `=`, `al.${albumIdCol}`)
+      .leftJoin(`${artistTable} as ar`, `al.${albumArtistIdCol}`, `=`, `ar.${artistIdCol}`);
     
     // Apply search filters if provided
     if (search && search.length >= 2) {
@@ -1885,6 +1921,7 @@ app.get('/api/tracks', async (req, res) => {
           TrackId: track.TRACKID || track.TrackId,
           Name: track.NAME || track.Name,
           UnitPrice: track.UNITPRICE || track.UnitPrice,
+          Milliseconds: track.MILLISECONDS || track.Milliseconds,
           AlbumTitle: track.ALBUMTITLE || track.AlbumTitle,
           ArtistName: track.ARTISTNAME || track.ArtistName
         };
@@ -1894,6 +1931,7 @@ app.get('/api/tracks', async (req, res) => {
           TrackId: track.trackid || track.TrackId,
           Name: track.name || track.Name,
           UnitPrice: track.unitprice || track.UnitPrice,
+          Milliseconds: track.milliseconds || track.Milliseconds,
           AlbumTitle: track.albumtitle || track.AlbumTitle,
           ArtistName: track.artistname || track.ArtistName
         };
