@@ -109,7 +109,7 @@ const Albums: React.FC = () => {
         params.set('offset', '0');
       }
 
-      const response = await fetch(`http://localhost:3001/api/table/Album?${params}`);
+      const response = await fetch(`http://localhost:3001/api/albums?${params}`);
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: Failed to fetch albums`);
       }
@@ -126,80 +126,39 @@ const Albums: React.FC = () => {
       const normalizedAlbums = albumsData.map((album: any) => ({
         AlbumId: album.AlbumId || album.albumid || album.ALBUMID || album.album_id,
         Title: album.Title || album.title || album.TITLE,
-        ArtistId: album.ArtistId || album.artistid || album.ARTISTID || album.artist_id
+        ArtistId: album.ArtistId || album.artistid || album.ARTISTID || album.artist_id,
+        ArtistName: album.ArtistName || album.artistname || album.ARTISTNAME || 'Unknown Artist'
       }));
       
-      // If we have albums, fetch artist names and filter by artist if needed
+      // If we have albums, apply any client-side filtering if needed
       if (normalizedAlbums.length > 0) {
-        try {
-          // Get unique artist IDs
-          const artistIds = [...new Set(normalizedAlbums.map((album: any) => album.ArtistId).filter(Boolean))];
-          
-          if (artistIds.length > 0) {
-            // Fetch artist data
-            const artistParams = new URLSearchParams({
-              conn: activeConnection.name,
-              limit: '1000', // Get all artists we need
-              offset: '0'
-            });
-            
-            const artistResponse = await fetch(`http://localhost:3001/api/table/Artist?${artistParams}`);
-            if (artistResponse.ok) {
-              const artistData = await artistResponse.json();
-              const artistMap = new Map();
-              
-              if (artistData.rows) {
-                artistData.rows.forEach((artist: any) => {
-                  const artistId = artist.ArtistId || artist.artistid || artist.ARTISTID || artist.artist_id;
-                  const artistName = artist.Name || artist.name || artist.NAME;
-                  artistMap.set(artistId, artistName);
-                });
-              }
-              
-              // Add artist names to albums
-              let enrichedAlbums = normalizedAlbums.map((album: any) => ({
-                ...album,
-                ArtistName: artistMap.get(album.ArtistId) || 'Unknown Artist'
-              }));
-              
-              // Filter by artist name if searching for an artist
-              if (searchValue && !searchColumn) {
-                // If no specific column is selected, check if this looks like an artist search
-                const artistParam = searchParams.get('artist');
-                if (artistParam) {
-                  // This is an artist filter from URL, filter albums by artist name
-                  enrichedAlbums = enrichedAlbums.filter((album: any) => 
-                    album.ArtistName?.toLowerCase().includes(searchValue.toLowerCase())
-                  );
-                  // Update total rows to reflect filtered count
-                  setTotalRows(enrichedAlbums.length);
-                } else {
-                  // Regular search, use server-side filtering
-                  setTotalRows(data.totalRows || 0);
-                }
-              } else {
-                setTotalRows(data.totalRows || 0);
-              }
-              
-              setAlbums(enrichedAlbums);
-            } else {
-              // If artist fetch fails, use albums without artist names
-              setAlbums(normalizedAlbums);
-              setTotalRows(data.totalRows || 0);
-            }
+        let enrichedAlbums = normalizedAlbums;
+        
+        // Filter by artist name if searching for an artist
+        if (searchValue && !searchColumn) {
+          // If no specific column is selected, check if this looks like an artist search
+          const artistParam = searchParams.get('artist');
+          if (artistParam) {
+            // This is an artist filter from URL, filter albums by artist name
+            enrichedAlbums = enrichedAlbums.filter((album: any) => 
+              album.ArtistName?.toLowerCase().includes(searchValue.toLowerCase())
+            );
+            // Update total rows to reflect filtered count
+            setTotalRows(enrichedAlbums.length);
           } else {
-            setAlbums(normalizedAlbums);
+            // Regular search, use server-side filtering
             setTotalRows(data.totalRows || 0);
           }
-        } catch (artistError) {
-          console.warn('Failed to fetch artist names:', artistError);
-          setAlbums(normalizedAlbums);
+        } else {
           setTotalRows(data.totalRows || 0);
         }
+        
+        setAlbums(enrichedAlbums);
       } else {
         setAlbums([]);
-        setTotalRows(data.totalRows || 0);
+        setTotalRows(0);
       }
+      
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load albums');
       setAlbums([]);

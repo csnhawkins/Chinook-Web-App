@@ -503,6 +503,193 @@ app.get('/api/invoices', async (req, res) => {
   }
 });
 
+// --- Artists endpoint ---
+app.get('/api/artists', async (req, res) => {
+  const conn = req.query.conn || defaultConnection;
+  const db = getDb(conn);
+  const currentConnections = getConnections();
+  const config = currentConnections[conn] || currentConnections[defaultConnection];
+  const dbType = config.client;
+
+  // Get table names for current database
+  const artistTable = getTableName('Artist', conn);
+  const albumTable = getTableName('Album', conn);
+
+  // Search/filter params
+  const search = req.query.search || '';
+  const searchColumn = req.query.searchColumn || '';
+  const exactMatch = req.query.exactMatch == '1';
+  const limit = parseInt(req.query.limit) || 50;
+  const offset = parseInt(req.query.offset) || 0;
+
+  console.log(`🎭 Artists query: offset=${offset}, limit=${limit}, search="${search}", conn=${conn}`);
+
+  try {
+    // Get column names for current database type
+    const artistIdCol = getColName('ArtistId', conn);
+    const artistNameCol = getColName('Name', conn);
+    const albumArtistIdCol = getColName('ArtistId', conn);
+
+    console.log(`🔍 Artist columns - Table: ${artistTable}, Album: ${albumTable}, DB Type: ${dbType}`);
+
+    // Build query with album count
+    let query = db(`${artistTable} as ar`)
+      .leftJoin(`${albumTable} as al`, `ar.${artistIdCol}`, `al.${albumArtistIdCol}`)
+      .select([
+        `ar.${artistIdCol} as ArtistId`,
+        `ar.${artistNameCol} as Name`,
+        db.raw(`COUNT(al.${albumArtistIdCol}) as AlbumCount`)
+      ])
+      .groupBy(`ar.${artistIdCol}`, `ar.${artistNameCol}`);
+
+    // Build count query
+    let countQuery = db(artistTable).count('* as total');
+
+    // Apply search filters
+    if (search && search.length >= 2) {
+      query = query.where(function() {
+        this.whereRaw(`LOWER(ar.${artistNameCol}) LIKE ?`, [`%${search.toLowerCase()}%`]);
+      });
+      
+      countQuery = countQuery.where(function() {
+        this.whereRaw(`LOWER(${artistNameCol}) LIKE ?`, [`%${search.toLowerCase()}%`]);
+      });
+    }
+
+    // Apply pagination and ordering
+    query = query.orderBy(`ar.${artistNameCol}`).limit(limit).offset(offset);
+
+    console.log(`🔍 Artist SQL: ${query.toString()}`);
+
+    const start = Date.now();
+    const [rows, countRes] = await Promise.all([query, countQuery]);
+    const timeMs = Date.now() - start;
+
+    // Get total count
+    let totalRows = 0;
+    if (Array.isArray(countRes)) {
+      totalRows = parseInt(countRes[0]?.total || countRes[0]?.TOTAL || 0, 10);
+    } else {
+      totalRows = parseInt(countRes?.total || countRes?.TOTAL || 0, 10);
+    }
+
+    // Format the results
+    const formattedArtists = rows.map(row => ({
+      ArtistId: row.ArtistId || row.ARTISTID,
+      Name: row.Name || row.NAME,
+      AlbumCount: parseInt(row.AlbumCount || row.ALBUMCOUNT || 0, 10)
+    }));
+
+    console.log(`✅ Artists query OK: ${formattedArtists.length} rows of ${totalRows} in ${timeMs}ms (conn: ${conn})`);
+    res.json({ 
+      rows: formattedArtists, 
+      rowCount: formattedArtists.length, 
+      totalRows, 
+      timeMs 
+    });
+
+  } catch (err) {
+    console.error(`❌ Artists query error:`, err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- Albums endpoint ---
+app.get('/api/albums', async (req, res) => {
+  const conn = req.query.conn || defaultConnection;
+  const db = getDb(conn);
+  const currentConnections = getConnections();
+  const config = currentConnections[conn] || currentConnections[defaultConnection];
+  const dbType = config.client;
+
+  // Get table names for current database
+  const albumTable = getTableName('Album', conn);
+  const artistTable = getTableName('Artist', conn);
+
+  // Search/filter params
+  const search = req.query.search || '';
+  const searchColumn = req.query.searchColumn || '';
+  const exactMatch = req.query.exactMatch == '1';
+  const limit = parseInt(req.query.limit) || 50;
+  const offset = parseInt(req.query.offset) || 0;
+
+  console.log(`💿 Albums query: offset=${offset}, limit=${limit}, search="${search}", conn=${conn}`);
+
+  try {
+    // Get column names for current database type
+    const albumIdCol = getColName('AlbumId', conn);
+    const albumTitleCol = getColName('Title', conn);
+    const albumArtistIdCol = getColName('ArtistId', conn);
+    const artistIdCol = getColName('ArtistId', conn);
+    const artistNameCol = getColName('Name', conn);
+
+    console.log(`🔍 Album columns - Table: ${albumTable}, Artist: ${artistTable}, DB Type: ${dbType}`);
+
+    // Build query with proper joins for all database types
+    let query = db(`${albumTable} as al`)
+      .leftJoin(`${artistTable} as ar`, `al.${albumArtistIdCol}`, `ar.${artistIdCol}`)
+      .select([
+        `al.${albumIdCol} as AlbumId`,
+        `al.${albumTitleCol} as Title`,
+        `al.${albumArtistIdCol} as ArtistId`,
+        `ar.${artistNameCol} as ArtistName`
+      ]);
+
+    // Build count query
+    let countQuery = db(`${albumTable} as al`)
+      .leftJoin(`${artistTable} as ar`, `al.${albumArtistIdCol}`, `ar.${artistIdCol}`)
+      .count('* as total');
+
+    // Apply search filters
+    if (search && search.length >= 2) {
+      const searchFilter = function() {
+        this.whereRaw(`LOWER(al.${albumTitleCol}) LIKE ?`, [`%${search.toLowerCase()}%`])
+          .orWhereRaw(`LOWER(ar.${artistNameCol}) LIKE ?`, [`%${search.toLowerCase()}%`]);
+      };
+
+      query = query.where(searchFilter);
+      countQuery = countQuery.where(searchFilter);
+    }
+
+    // Apply pagination and ordering
+    query = query.orderBy(`al.${albumTitleCol}`).limit(limit).offset(offset);
+
+    console.log(`🔍 Album SQL: ${query.toString()}`);
+
+    const start = Date.now();
+    const [rows, countRes] = await Promise.all([query, countQuery]);
+    const timeMs = Date.now() - start;
+
+    // Get total count
+    let totalRows = 0;
+    if (Array.isArray(countRes)) {
+      totalRows = parseInt(countRes[0]?.total || countRes[0]?.TOTAL || 0, 10);
+    } else {
+      totalRows = parseInt(countRes?.total || countRes?.TOTAL || 0, 10);
+    }
+
+    // Format the results with artist information
+    const formattedAlbums = rows.map(row => ({
+      AlbumId: row.AlbumId || row.ALBUMID,
+      Title: row.Title || row.TITLE,
+      ArtistId: row.ArtistId || row.ARTISTID,
+      ArtistName: row.ArtistName || row.ARTISTNAME || 'Unknown Artist'
+    }));
+
+    console.log(`✅ Albums query OK: ${formattedAlbums.length} rows of ${totalRows} in ${timeMs}ms (conn: ${conn})`);
+    res.json({ 
+      rows: formattedAlbums, 
+      rowCount: formattedAlbums.length, 
+      totalRows, 
+      timeMs 
+    });
+
+  } catch (err) {
+    console.error(`❌ Albums query error:`, err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // --- Employees endpoint ---
 
 // --- Config endpoint ---
@@ -1629,137 +1816,86 @@ app.get('/api/tracks', async (req, res) => {
   const dbType = config.client;
   
   try {
-    let query;
-    
     // Get table names for this database type
-    const trackTable = (tableMappings[dbType] && tableMappings[dbType]['Track']) ? tableMappings[dbType]['Track'] : 'Track';
-    const albumTable = (tableMappings[dbType] && tableMappings[dbType]['Album']) ? tableMappings[dbType]['Album'] : 'Album';
-    const artistTable = (tableMappings[dbType] && tableMappings[dbType]['Artist']) ? tableMappings[dbType]['Artist'] : 'Artist';
+    const trackTable = getTableName('Track', conn);
+    const albumTable = getTableName('Album', conn);
+    const artistTable = getTableName('Artist', conn);
     
     // Get column names for this database type
     const trackIdCol = getColName('TrackId', conn);
     const trackNameCol = getColName('Name', conn);
     const unitPriceCol = getColName('UnitPrice', conn);
+    const trackAlbumIdCol = getColName('AlbumId', conn);
     const albumIdCol = getColName('AlbumId', conn);
-    const artistIdCol = getColName('ArtistId', conn);
     const albumTitleCol = getColName('Title', conn);
+    const albumArtistIdCol = getColName('ArtistId', conn);
+    const artistIdCol = getColName('ArtistId', conn);
     const artistNameCol = getColName('Name', conn);
     
     console.log(`🔧 Track query - DB: ${dbType}, Tables: Track=${trackTable}, Album=${albumTable}, Artist=${artistTable}`);
-    console.log(`🔧 Track columns: TrackId=${trackIdCol}, Name=${trackNameCol}, UnitPrice=${unitPriceCol}, AlbumId=${albumIdCol}`);
+    console.log(`🔧 Track columns: TrackId=${trackIdCol}, Name=${trackNameCol}, UnitPrice=${unitPriceCol}, AlbumId=${trackAlbumIdCol}`);
     
-    // Build query with joins to get artist and album info
-    if (dbType === 'pg') {
-      // PostgreSQL
-      query = db(`${trackTable} as t`)
-        .select(
-          `t.${trackIdCol} as TrackId`, 
-          `t.${trackNameCol} as Name`, 
-          `t.${unitPriceCol} as UnitPrice`, 
-          `ar.${artistNameCol} as ArtistName`, 
-          `al.${albumTitleCol} as AlbumTitle`
-        )
-        .leftJoin(`${albumTable} as al`, `t.${albumIdCol}`, `al.${albumIdCol}`)
-        .leftJoin(`${artistTable} as ar`, `al.${artistIdCol}`, `ar.${artistIdCol}`);
-    } else if (dbType === 'oracledb') {
-      // Oracle - Use proper column mappings
-      query = db(`${trackTable} t`)
-        .select(
-          `t.${trackIdCol} as TrackId`, 
-          `t.${trackNameCol} as Name`, 
-          `t.${unitPriceCol} as UnitPrice`, 
-          `ar.${artistNameCol} as ArtistName`, 
-          `al.${albumTitleCol} as AlbumTitle`
-        )
-        .leftJoin(`${albumTable} al`, `t.${albumIdCol}`, `al.${albumIdCol}`)
-        .leftJoin(`${artistTable} ar`, `al.${artistIdCol}`, `ar.${artistIdCol}`);
-    } else if (dbType === 'mysql') {
-      // MySQL
-      query = db(`${trackTable} as t`)
-        .select('t.TrackId', 't.Name', 't.UnitPrice', 'ar.Name as ArtistName', 'al.Title as AlbumTitle')
-        .leftJoin(`${albumTable} as al`, 't.AlbumId', 'al.AlbumId')
-        .leftJoin(`${artistTable} as ar`, 'al.ArtistId', 'ar.ArtistId');
-    } else {
-      // SQL Server
-      query = db(`${trackTable} as t`)
-        .select('t.TrackId', 't.Name', 't.UnitPrice', 'ar.Name as ArtistName', 'al.Title as AlbumTitle')
-        .leftJoin(`${albumTable} as al`, 't.AlbumId', 'al.AlbumId')
-        .leftJoin(`${artistTable} as ar`, 'al.ArtistId', 'ar.ArtistId');
-    }
+    // Build the main query with proper joins for Oracle
+    let query = db(`${trackTable} as t`)
+      .leftJoin(`${albumTable} as al`, `t.${trackAlbumIdCol}`, `al.${albumIdCol}`)
+      .leftJoin(`${artistTable} as ar`, `al.${albumArtistIdCol}`, `ar.${artistIdCol}`)
+      .select([
+        `t.${trackIdCol} as TrackId`,
+        `t.${trackNameCol} as Name`,
+        `t.${unitPriceCol} as UnitPrice`,
+        `al.${albumTitleCol} as AlbumTitle`,
+        `ar.${artistNameCol} as ArtistName`
+      ]);
     
+    // Build count query with same joins
+    let totalQuery = db(`${trackTable} as t`)
+      .leftJoin(`${albumTable} as al`, `t.${trackAlbumIdCol}`, `al.${albumIdCol}`)
+      .leftJoin(`${artistTable} as ar`, `al.${albumArtistIdCol}`, `ar.${artistIdCol}`);
+    
+    // Apply search filters if provided
     if (search && search.length >= 2) {
-      // Search in track name, artist name, and album title
-      query = query.where(function() {
-        if (dbType === 'pg') {
-          this.whereRaw(`LOWER(t.${trackNameCol}) LIKE ?`, [`%${search.toLowerCase()}%`])
-            .orWhereRaw(`LOWER(ar.${artistNameCol}) LIKE ?`, [`%${search.toLowerCase()}%`])
-            .orWhereRaw(`LOWER(al.${albumTitleCol}) LIKE ?`, [`%${search.toLowerCase()}%`]);
-        } else if (dbType === 'oracledb') {
-          this.whereRaw(`LOWER(t.${trackNameCol}) LIKE ?`, [`%${search.toLowerCase()}%`])
-            .orWhereRaw(`LOWER(ar.${artistNameCol}) LIKE ?`, [`%${search.toLowerCase()}%`])
-            .orWhereRaw(`LOWER(al.${albumTitleCol}) LIKE ?`, [`%${search.toLowerCase()}%`]);
-        } else {
-          this.whereRaw(`LOWER(t.Name) LIKE ?`, [`%${search.toLowerCase()}%`])
-            .orWhereRaw(`LOWER(ar.Name) LIKE ?`, [`%${search.toLowerCase()}%`])
-            .orWhereRaw(`LOWER(al.Title) LIKE ?`, [`%${search.toLowerCase()}%`]);
-        }
-      });
-    }
-    
-    // Get total count for pagination (before applying limit/offset)
-    let totalQuery;
-    if (dbType === 'oracledb') {
-      totalQuery = db(`${trackTable} t`)
-        .leftJoin(`${albumTable} al`, `t.${albumIdCol}`, `al.${albumIdCol}`)
-        .leftJoin(`${artistTable} ar`, `al.${artistIdCol}`, `ar.${artistIdCol}`);
-    } else {
-      totalQuery = db(`${trackTable} as t`)
-        .leftJoin(`${albumTable} as al`, `t.${albumIdCol}`, `al.${albumIdCol}`)
-        .leftJoin(`${artistTable} as ar`, `al.${artistIdCol}`, `ar.${artistIdCol}`);
-    }
+      const searchFilter = function() {
+        this.whereRaw(`LOWER(t.${trackNameCol}) LIKE ?`, [`%${search.toLowerCase()}%`])
+          .orWhereRaw(`LOWER(al.${albumTitleCol}) LIKE ?`, [`%${search.toLowerCase()}%`])
+          .orWhereRaw(`LOWER(ar.${artistNameCol}) LIKE ?`, [`%${search.toLowerCase()}%`]);
+      };
       
-    if (search && search.length >= 2) {
-      totalQuery = totalQuery.where(function() {
-        if (dbType === 'pg') {
-          this.whereRaw(`LOWER(t.${trackNameCol}) LIKE ?`, [`%${search.toLowerCase()}%`])
-            .orWhereRaw(`LOWER(ar.${artistNameCol}) LIKE ?`, [`%${search.toLowerCase()}%`])
-            .orWhereRaw(`LOWER(al.${albumTitleCol}) LIKE ?`, [`%${search.toLowerCase()}%`]);
-        } else if (dbType === 'oracledb') {
-          this.whereRaw(`LOWER(t.${trackNameCol}) LIKE ?`, [`%${search.toLowerCase()}%`])
-            .orWhereRaw(`LOWER(ar.${artistNameCol}) LIKE ?`, [`%${search.toLowerCase()}%`])
-            .orWhereRaw(`LOWER(al.${albumTitleCol}) LIKE ?`, [`%${search.toLowerCase()}%`]);
-        } else {
-          this.whereRaw(`LOWER(t.Name) LIKE ?`, [`%${search.toLowerCase()}%`])
-            .orWhereRaw(`LOWER(ar.Name) LIKE ?`, [`%${search.toLowerCase()}%`])
-            .orWhereRaw(`LOWER(al.Title) LIKE ?`, [`%${search.toLowerCase()}%`]);
-        }
-      });
+      query = query.where(searchFilter);
+      totalQuery = totalQuery.where(searchFilter);
     }
-
-    const totalCountResult = await totalQuery.count('* as count').first();
-    const totalCount = totalCountResult.count;
     
-    const rawTracks = await query.limit(limit).offset(offset).orderBy(dbType === 'pg' ? `t.${trackNameCol}` : dbType === 'oracledb' ? 't.NAME' : 't.Name');
+    console.log(`🔍 Track SQL: ${query.toString()}`);
+    
+    // Execute queries
+    const start = Date.now();
+    const [rawTracks, totalCountResult] = await Promise.all([
+      query.limit(limit).offset(offset).orderBy(`t.${trackIdCol}`),
+      totalQuery.count('* as total').first()
+    ]);
+    const timeMs = Date.now() - start;
+    
+    // Get total count
+    const totalCount = totalCountResult?.total || totalCountResult?.TOTAL || 0;
     
     // Normalize column names for consistent frontend consumption
     const tracks = rawTracks.map(track => {
-      if (dbType === 'pg') {
-        // Map PostgreSQL snake_case to PascalCase for frontend
-        return {
-          TrackId: track.trackid || track.TrackId,
-          Name: track.name || track.Name,
-          UnitPrice: track.unitprice || track.UnitPrice,
-          ArtistName: track.artistname || track.ArtistName,
-          AlbumTitle: track.albumtitle || track.AlbumTitle
-        };
-      } else if (dbType === 'oracledb') {
-        // Map Oracle UPPERCASE to PascalCase for frontend
+      if (dbType === 'oracledb') {
+        // Oracle returns UPPERCASE column names
         return {
           TrackId: track.TRACKID || track.TrackId,
           Name: track.NAME || track.Name,
           UnitPrice: track.UNITPRICE || track.UnitPrice,
-          ArtistName: track.ARTISTNAME || track.ArtistName,
-          AlbumTitle: track.ALBUMTITLE || track.AlbumTitle
+          AlbumTitle: track.ALBUMTITLE || track.AlbumTitle,
+          ArtistName: track.ARTISTNAME || track.ArtistName
+        };
+      } else if (dbType === 'pg') {
+        // PostgreSQL might return snake_case, but our query uses aliases so should be PascalCase
+        return {
+          TrackId: track.trackid || track.TrackId,
+          Name: track.name || track.Name,
+          UnitPrice: track.unitprice || track.UnitPrice,
+          AlbumTitle: track.albumtitle || track.AlbumTitle,
+          ArtistName: track.artistname || track.ArtistName
         };
       } else {
         // SQL Server and MySQL already use PascalCase
@@ -1767,16 +1903,17 @@ app.get('/api/tracks', async (req, res) => {
       }
     });
     
-    console.log(`🔍 Track search "${search}" returned ${tracks.length} results`);
+    console.log(`✅ Tracks query OK: ${tracks.length} rows of ${totalCount} in ${timeMs}ms (conn: ${conn})`);
     res.json({
       tracks: tracks,
-      totalCount: totalCount,
-      page: Math.floor(offset / limit) + 1,
-      totalPages: Math.ceil(totalCount / limit)
+      total: totalCount,
+      limit: limit,
+      offset: offset
     });
-  } catch (error) {
-    console.error('Track search error:', error);
-    res.status(500).json({ error: error.message });
+    
+  } catch (err) {
+    console.error(`❌ Track search error:`, err);
+    res.status(500).json({ error: err.message });
   }
 });
 

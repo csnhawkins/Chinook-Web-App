@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Database, Settings, Loader2, Edit, TestTube, Filter, CheckCircle, XCircle, AlertTriangle } from 'lucide-react';
+import { Database, Settings, Loader2, Edit, TestTube, Filter, CheckCircle, XCircle, AlertTriangle, Server, Layers } from 'lucide-react';
 import { DatabaseConnection } from '../types';
 import { ConnectionService } from '../services/connectionService';
 import { useApp } from '../context/AppContext';
@@ -131,6 +131,22 @@ const ConnectionsPage: React.FC = () => {
     }
   };
 
+  const getDatabaseIcon = (client: string) => {
+    switch (client) {
+      case 'mssql': 
+        return <Server className="h-5 w-5 text-blue-600" />;
+      case 'mysql':
+      case 'mysql2': 
+        return <Database className="h-5 w-5 text-orange-600" />;
+      case 'pg': 
+        return <Layers className="h-5 w-5 text-blue-800" />;
+      case 'oracledb': 
+        return <Database className="h-5 w-5 text-red-600" />;
+      default: 
+        return <Database className="h-5 w-5 text-gray-600" />;
+    }
+  };
+
   const getAvailableRdbmsTypes = () => {
     const types = new Set<string>();
     Object.values(connections).forEach(config => {
@@ -232,9 +248,10 @@ const ConnectionsPage: React.FC = () => {
                 <h3 className="font-semibold text-gray-900">
                   {config.displayName || name}
                 </h3>
-                <p className="text-sm text-gray-500">
-                  {getClientDisplayName(config.client)}
-                </p>
+                <div className="flex items-center space-x-2 text-sm text-gray-500">
+                  {getDatabaseIcon(config.client)}
+                  <span>{getClientDisplayName(config.client)}</span>
+                </div>
               </div>
             </div>
           </div>
@@ -404,13 +421,14 @@ const ConnectionsPage: React.FC = () => {
               <button
                 key={rdbmsType}
                 onClick={() => setSelectedRdbms(rdbmsType)}
-                className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
+                className={`flex items-center space-x-2 px-3 py-1 rounded-md text-sm font-medium transition-colors ${
                   selectedRdbms === rdbmsType
                     ? 'bg-blue-100 text-blue-700 border border-blue-300'
                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                 }`}
               >
-                {getClientDisplayName(rdbmsType)}
+                {getDatabaseIcon(rdbmsType)}
+                <span>{getClientDisplayName(rdbmsType)}</span>
               </button>
             ))}
           </div>
@@ -443,7 +461,7 @@ const ConnectionsPage: React.FC = () => {
           // Show filtered connections
           <div className="space-y-4">
             <div className="flex items-center space-x-3">
-              <Database className="h-5 w-5 text-gray-500" />
+              {getDatabaseIcon(selectedRdbms)}
               <h2 className="text-xl font-semibold text-gray-900">
                 {getClientDisplayName(selectedRdbms)}
               </h2>

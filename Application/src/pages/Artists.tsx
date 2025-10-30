@@ -70,7 +70,7 @@ const Artists: React.FC = () => {
         params.append('exactMatch', '1');
       }
 
-      const response = await fetch(`http://localhost:3001/api/table/Artist?${params}`);
+      const response = await fetch(`http://localhost:3001/api/artists?${params}`);
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: Failed to fetch artists`);
       }
@@ -83,86 +83,8 @@ const Artists: React.FC = () => {
 
       const artistsData = data.rows || [];
       
-      // Normalize artist data to handle different database schemas
-      const normalizedArtists = artistsData.map((artist: any) => ({
-        ArtistId: artist.ArtistId || artist.artistid || artist.ARTISTID || artist.artist_id,
-        Name: artist.Name || artist.name || artist.NAME
-      }));
-      
-      // If we have artists, fetch album and track counts
-      if (normalizedArtists.length > 0) {
-        try {
-          // Fetch album counts for these artists
-          const albumParams = new URLSearchParams({
-            conn: activeConnection.name,
-            limit: '1000',
-            offset: '0'
-          });
-          
-          const albumResponse = await fetch(`http://localhost:3001/api/table/Album?${albumParams}`);
-          if (albumResponse.ok) {
-            const albumData = await albumResponse.json();
-            const albumCounts = new Map();
-            
-            if (albumData.rows) {
-              albumData.rows.forEach((album: any) => {
-                const artistId = album.ArtistId || album.artistid || album.ARTISTID || album.artist_id;
-                albumCounts.set(artistId, (albumCounts.get(artistId) || 0) + 1);
-              });
-            }
-            
-            // Fetch track counts via albums
-            const trackParams = new URLSearchParams({
-              conn: activeConnection.name,
-              limit: '5000', // Get more tracks to count properly
-              offset: '0'
-            });
-            
-            const trackResponse = await fetch(`http://localhost:3001/api/table/Track?${trackParams}`);
-            const trackCounts = new Map();
-            
-            if (trackResponse.ok) {
-              const trackData = await trackResponse.json();
-              if (trackData.rows && albumData.rows) {
-                // Create album-to-artist mapping
-                const albumToArtist = new Map();
-                albumData.rows.forEach((album: any) => {
-                  const albumId = album.AlbumId || album.albumid || album.ALBUMID || album.album_id;
-                  const artistId = album.ArtistId || album.artistid || album.ARTISTID || album.artist_id;
-                  albumToArtist.set(albumId, artistId);
-                });
-                
-                // Count tracks per artist
-                trackData.rows.forEach((track: any) => {
-                  const albumId = track.AlbumId || track.albumid || track.ALBUMID || track.album_id;
-                  const artistId = albumToArtist.get(albumId);
-                  if (artistId) {
-                    trackCounts.set(artistId, (trackCounts.get(artistId) || 0) + 1);
-                  }
-                });
-              }
-            }
-            
-            // Add counts to artists
-            const enrichedArtists = normalizedArtists.map((artist: any) => ({
-              ...artist,
-              AlbumCount: albumCounts.get(artist.ArtistId) || 0,
-              TrackCount: trackCounts.get(artist.ArtistId) || 0
-            }));
-            
-            setArtists(enrichedArtists);
-          } else {
-            // If count fetch fails, use artists without counts
-            setArtists(normalizedArtists);
-          }
-        } catch (countError) {
-          console.warn('Failed to fetch artist counts:', countError);
-          setArtists(normalizedArtists);
-        }
-      } else {
-        setArtists([]);
-      }
-      
+      // The new /api/artists endpoint already includes album counts and normalized data
+      setArtists(artistsData);
       setTotalRows(data.totalRows || 0);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load artists');

@@ -104,11 +104,11 @@ const Reports: React.FC = () => {
         InvoiceId: data.invoice.InvoiceId || data.invoice.invoiceId,
         InvoiceDate: data.invoice.InvoiceDate || data.invoice.invoiceDate,
         Total: data.invoice.Total || data.invoice.total,
-        BillingAddress: data.invoice.BillingAddress || data.invoice.billingAddress,
-        BillingCity: data.invoice.BillingCity || data.invoice.billingCity,
-        BillingState: data.invoice.BillingState || data.invoice.billingState,
-        BillingCountry: data.invoice.BillingCountry || data.invoice.billingCountry,
-        BillingPostalCode: data.invoice.BillingPostalCode || data.invoice.billingPostalCode,
+        BillingAddress: data.invoice.BillingAddress || data.invoice.billingAddress || data.invoice.billing_address,
+        BillingCity: data.invoice.BillingCity || data.invoice.billingCity || data.invoice.billing_city,
+        BillingState: data.invoice.BillingState || data.invoice.billingState || data.invoice.billing_state,
+        BillingCountry: data.invoice.BillingCountry || data.invoice.billingCountry || data.invoice.billing_country,
+        BillingPostalCode: data.invoice.BillingPostalCode || data.invoice.billingPostalCode || data.invoice.billing_postal_code,
         
         // Customer details from backend
         CustomerId: data.customer.CustomerId || data.customer.customerId,

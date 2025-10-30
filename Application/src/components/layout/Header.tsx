@@ -119,7 +119,7 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
               {/* Admin mode indicator */}
               <div className={`flex items-center space-x-1 lg:space-x-2 rounded-lg px-2 lg:px-3 py-1 ${
                 adminMode 
-                  ? 'bg-blue-100 text-blue-800 border border-blue-300' 
+                  ? 'bg-purple-100 text-purple-800 border border-purple-300' 
                   : 'bg-orange-100 text-orange-800 border border-orange-300'
               }`}>
                 <User className="h-3 w-3 lg:h-4 lg:w-4" />
