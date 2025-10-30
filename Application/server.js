@@ -533,13 +533,20 @@ app.get('/api/artists', async (req, res) => {
     console.log(`🔍 Artist columns - Table: ${artistTable}, Album: ${albumTable}, DB Type: ${dbType}`);
     console.log(`🔍 Artist ID column: ${artistIdCol}, Album Artist ID: ${albumArtistIdCol}`);
 
-    // Build query with album count - simpler approach
+    // Build query with album count - database-specific quoting
+    let countExpression;
+    if (dbType === 'oracledb') {
+      countExpression = `COUNT("al"."${albumArtistIdCol}") as AlbumCount`;
+    } else {
+      countExpression = `COUNT(al.${albumArtistIdCol}) as AlbumCount`;
+    }
+    
     let query = db(`${artistTable} as ar`)
       .leftJoin(`${albumTable} as al`, `ar.${artistIdCol}`, `=`, `al.${albumArtistIdCol}`)
       .select([
         `ar.${artistIdCol} as ArtistId`,
         `ar.${artistNameCol} as Name`,
-        db.raw(`COUNT("al"."${albumArtistIdCol}") as AlbumCount`)
+        db.raw(countExpression)
       ])
       .groupBy(`ar.${artistIdCol}`, `ar.${artistNameCol}`);
 
@@ -1856,6 +1863,7 @@ app.get('/api/customers', async (req, res) => {
 app.get('/api/tracks', async (req, res) => {
   const conn = req.query.conn || defaultConnection;
   const search = req.query.search || '';
+  const albumId = req.query.albumId; // Add album filter support
   const limit = parseInt(req.query.limit) || 20;
   const offset = parseInt(req.query.offset) || 0;
   const db = getDb(conn);
@@ -1893,6 +1901,7 @@ app.get('/api/tracks', async (req, res) => {
         `t.${trackNameCol} as Name`,
         `t.${unitPriceCol} as UnitPrice`,
         `t.${millisecondsCol} as Milliseconds`,
+        `t.${trackAlbumIdCol} as AlbumId`,
         `al.${albumTitleCol} as AlbumTitle`,
         `ar.${artistNameCol} as ArtistName`
       ]);
@@ -1914,6 +1923,12 @@ app.get('/api/tracks', async (req, res) => {
       totalQuery = totalQuery.where(searchFilter);
     }
     
+    // Apply album filter if provided
+    if (albumId) {
+      query = query.where(`t.${trackAlbumIdCol}`, albumId);
+      totalQuery = totalQuery.where(`t.${trackAlbumIdCol}`, albumId);
+    }
+    
     console.log(`🔍 Track SQL: ${query.toString()}`);
     
     // Execute queries
@@ -1927,6 +1942,8 @@ app.get('/api/tracks', async (req, res) => {
     // Get total count
     const totalCount = totalCountResult?.total || totalCountResult?.TOTAL || 0;
     
+    console.log(`🔍 Track query result sample:`, rawTracks.slice(0, 2));
+    
     // Normalize column names for consistent frontend consumption
     const tracks = rawTracks.map(track => {
       if (dbType === 'oracledb') {
@@ -1936,6 +1953,7 @@ app.get('/api/tracks', async (req, res) => {
           Name: track.NAME || track.Name,
           UnitPrice: track.UNITPRICE || track.UnitPrice,
           Milliseconds: track.MILLISECONDS || track.Milliseconds,
+          AlbumId: track.ALBUMID || track.AlbumId,
           AlbumTitle: track.ALBUMTITLE || track.AlbumTitle,
           ArtistName: track.ARTISTNAME || track.ArtistName
         };
@@ -1946,6 +1964,7 @@ app.get('/api/tracks', async (req, res) => {
           Name: track.name || track.Name,
           UnitPrice: track.unitprice || track.UnitPrice,
           Milliseconds: track.milliseconds || track.Milliseconds,
+          AlbumId: track.albumid || track.AlbumId,
           AlbumTitle: track.albumtitle || track.AlbumTitle,
           ArtistName: track.artistname || track.ArtistName
         };

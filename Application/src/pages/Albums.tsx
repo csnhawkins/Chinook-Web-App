@@ -45,15 +45,13 @@ const Albums: React.FC = () => {
         conn: activeConnection?.name || '',
         limit: '100',
         offset: '0',
-        searchColumn: 'AlbumId',
-        search: album.AlbumId.toString(),
-        exactMatch: '1'
+        albumId: album.AlbumId.toString()
       });
       
-      const response = await fetch(`http://localhost:3001/api/table/Track?${params}`);
+      const response = await fetch(`http://localhost:3001/api/tracks?${params}`);
       if (response.ok) {
         const data = await response.json();
-        setAlbumTracks(data.rows || []);
+        setAlbumTracks(data.tracks || []);
       }
     } catch (error) {
       console.warn('Failed to fetch album tracks:', error);
