@@ -1,0 +1,26 @@
+# Ignore node_modules everywhere
+**/node_modules/
+
+# Ignore build output everywhere
+**/dist/
+**/build/
+**/coverage/
+
+# Ignore logs everywhere
+**/npm-debug.log*
+**/yarn-debug.log*
+**/yarn-error.log*
+
+# Ignore start-app.log
+start-app.log
+
+# Ignore OS files everywhere
+**/.DS_Store
+**/Thumbs.db
+
+# Ignore VS Code settings everywhere
+**/.vscode/
+
+# Ignore TDM output files everywhere
+**/masking_log.json
+**/subset_output.json
