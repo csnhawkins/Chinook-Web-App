@@ -1059,6 +1059,12 @@ app.get('/api/table/:table', async (req, res) => {
   try {
     let query = db(mappedTable).select('*');
     let countQuery = db(mappedTable).count({total: '*'});
+    
+    // Debug logging for PostgreSQL
+    if (dbType === 'pg') {
+      console.log(`🔍 PostgreSQL Debug - Table: ${table}, Mapped: ${mappedTable}, DB Type: ${dbType}`);
+    }
+    
     // Dynamic search logic
     if (search) {
       let columnsInfo = await db(mappedTable).columnInfo();

@@ -171,8 +171,24 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
         );
         setConnections(connectionArray);
         
-        // If no active connection is set, find and set default Production SQL Server
-        if (!activeConnection) {
+        // Check if we have a persisted connection that's still valid
+        const persistedConnection = sessionStorage.getItem('chinookActiveConnection');
+        let validPersistedConnection = null;
+        
+        if (persistedConnection) {
+          try {
+            const parsed = JSON.parse(persistedConnection);
+            // Check if this connection still exists in the current connections
+            validPersistedConnection = connectionArray.find(conn => 
+              conn.name === parsed.name && conn.client === parsed.client
+            );
+          } catch (e) {
+            console.warn('Failed to parse persisted connection:', e);
+          }
+        }
+        
+        // If no active connection is set and no valid persisted connection, find and set default Production SQL Server
+        if (!activeConnection && !validPersistedConnection) {
           // Look for production SQL Server connection first
           let defaultConnection = connectionArray.find(conn => 
             conn.environment === 'production' && 
@@ -210,6 +226,10 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
             setActiveConnection(defaultConnection);
             addNotification('info', `Connected to ${defaultConnection.displayName || defaultConnection.name}`);
           }
+        } else if (validPersistedConnection && !activeConnection) {
+          // Restore the valid persisted connection
+          setActiveConnection(validPersistedConnection);
+          addNotification('info', `Reconnected to ${validPersistedConnection.displayName || validPersistedConnection.name}`);
         }
       } catch (error) {
         console.error('Failed to load connections:', error);
