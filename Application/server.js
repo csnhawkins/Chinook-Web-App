@@ -2762,7 +2762,22 @@ app.delete('/api/customers/:id', async (req, res) => {
       
       await db.transaction(async (trx) => {
         if (config.client === 'pg') {
-          // PostgreSQL
+          // PostgreSQL - need to handle all foreign key constraints
+          // Delete in proper order: system_log -> invoice_line -> invoice -> customer
+          
+          // First, delete any system_log entries that reference invoices for this customer
+          try {
+            await trx.raw(`
+              DELETE FROM system_log 
+              WHERE invoice_id IN (
+                SELECT invoice_id FROM ${invoiceTableName} WHERE customer_id = ?
+              )
+            `, [customerId]);
+            console.log(`🗑️ Deleted system_log entries for customer ${customerId}`);
+          } catch (systemLogErr) {
+            console.log(`ℹ️ No system_log entries to delete or table doesn't exist: ${systemLogErr.message}`);
+          }
+          
           // Delete invoice lines for this customer's invoices
           await trx.raw(`
             DELETE FROM ${invoiceLineTableName} 
@@ -2770,15 +2785,33 @@ app.delete('/api/customers/:id', async (req, res) => {
               SELECT invoice_id FROM ${invoiceTableName} WHERE customer_id = ?
             )
           `, [customerId]);
+          console.log(`🗑️ Deleted invoice lines for customer ${customerId}`);
           
           // Delete invoices for this customer
           await trx(invoiceTableName).where('customer_id', customerId).del();
+          console.log(`🗑️ Deleted invoices for customer ${customerId}`);
           
           // Delete customer
           result = await trx(customerTableName).where('customer_id', customerId).del();
+          console.log(`🗑️ Deleted customer ${customerId}`);
           
         } else if (config.client === 'oracledb') {
-          // Oracle
+          // Oracle - handle foreign key constraints
+          // Delete in proper order: system_log -> invoice_line -> invoice -> customer
+          
+          // First, delete any system_log entries that reference invoices for this customer
+          try {
+            await trx.raw(`
+              DELETE FROM SYSTEM_LOG 
+              WHERE INVOICEID IN (
+                SELECT INVOICEID FROM INVOICE WHERE CUSTOMERID = ?
+              )
+            `, [customerId]);
+            console.log(`🗑️ Deleted system_log entries for customer ${customerId}`);
+          } catch (systemLogErr) {
+            console.log(`ℹ️ No system_log entries to delete or table doesn't exist: ${systemLogErr.message}`);
+          }
+          
           // Delete invoice lines for this customer's invoices
           await trx.raw(`
             DELETE FROM INVOICELINE 
@@ -2786,15 +2819,33 @@ app.delete('/api/customers/:id', async (req, res) => {
               SELECT INVOICEID FROM INVOICE WHERE CUSTOMERID = ?
             )
           `, [customerId]);
+          console.log(`🗑️ Deleted invoice lines for customer ${customerId}`);
           
           // Delete invoices for this customer
           await trx('INVOICE').where('CUSTOMERID', customerId).del();
+          console.log(`🗑️ Deleted invoices for customer ${customerId}`);
           
           // Delete customer
           result = await trx('CUSTOMER').where('CUSTOMERID', customerId).del();
+          console.log(`🗑️ Deleted customer ${customerId}`);
           
         } else {
-          // SQL Server and MySQL
+          // SQL Server and MySQL - handle foreign key constraints
+          // Delete in proper order: system_log -> invoice_line -> invoice -> customer
+          
+          // First, delete any system_log entries that reference invoices for this customer
+          try {
+            await trx.raw(`
+              DELETE FROM SystemLog 
+              WHERE InvoiceId IN (
+                SELECT InvoiceId FROM Invoice WHERE CustomerId = ?
+              )
+            `, [customerId]);
+            console.log(`🗑️ Deleted system_log entries for customer ${customerId}`);
+          } catch (systemLogErr) {
+            console.log(`ℹ️ No system_log entries to delete or table doesn't exist: ${systemLogErr.message}`);
+          }
+          
           // Delete invoice lines for this customer's invoices
           await trx.raw(`
             DELETE FROM InvoiceLine 
@@ -2802,12 +2853,15 @@ app.delete('/api/customers/:id', async (req, res) => {
               SELECT InvoiceId FROM Invoice WHERE CustomerId = ?
             )
           `, [customerId]);
+          console.log(`🗑️ Deleted invoice lines for customer ${customerId}`);
           
           // Delete invoices for this customer
           await trx('Invoice').where('CustomerId', customerId).del();
+          console.log(`🗑️ Deleted invoices for customer ${customerId}`);
           
           // Delete customer
           result = await trx(customerTableName).where('CustomerId', customerId).del();
+          console.log(`🗑️ Deleted customer ${customerId}`);
         }
       });
       
