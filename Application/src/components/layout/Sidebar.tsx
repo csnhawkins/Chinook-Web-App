@@ -20,9 +20,10 @@ import {
 interface SidebarProps {
   isOpen: boolean;
   onToggle: () => void;
+  onNavigate?: () => void;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
+const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle, onNavigate }) => {
   const { environment, adminMode } = useApp();
 
   // Environment-based accent color
@@ -65,8 +66,8 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
 
   return (
     <div className={`fixed inset-y-0 left-0 z-50 flex flex-col bg-white border-r border-gray-200 sidebar-transition ${
-      isOpen ? 'w-64' : 'w-16'
-    }`}>
+      isOpen ? 'w-64' : 'w-16 lg:w-16'
+    } ${!isOpen ? 'hidden lg:flex' : ''}`}>
       {/* Logo */}
       <div className="flex items-center justify-between h-16 px-4 border-b border-gray-200">
         {isOpen && (
@@ -116,6 +117,12 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
               <NavLink
                 key={item.name}
                 to={item.href}
+                onClick={() => {
+                  // Auto-close sidebar on mobile when navigating
+                  if (window.innerWidth < 1024 && onNavigate) {
+                    onNavigate();
+                  }
+                }}
                 className={({ isActive }) =>
                   `group flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
                     isActive
@@ -161,6 +168,12 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
               <NavLink
                 key={item.name}
                 to={item.href}
+                onClick={() => {
+                  // Auto-close sidebar on mobile when navigating
+                  if (window.innerWidth < 1024 && onNavigate) {
+                    onNavigate();
+                  }
+                }}
                 className={({ isActive }) =>
                   `group flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
                     isActive
