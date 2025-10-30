@@ -1275,7 +1275,7 @@ app.get('/api/table/:table', async (req, res) => {
   }
   const columns = await db(mappedTable).columnInfo();
   
-  // Normalize column names for PostgreSQL to match frontend expectations
+  // Normalize column names for PostgreSQL and Oracle to match frontend expectations
   let normalizedRows = rows;
   if (config.client === 'pg') {
     normalizedRows = rows.map(row => {
@@ -1283,6 +1283,17 @@ app.get('/api/table/:table', async (req, res) => {
       Object.keys(row).forEach(key => {
         // Convert snake_case to PascalCase for common columns
         const pascalKey = snakeToPascalCase(key);
+        normalizedRow[pascalKey] = row[key];
+      });
+      return normalizedRow;
+    });
+  } else if (config.client === 'oracledb') {
+    // Oracle returns UPPERCASE column names, convert to PascalCase
+    normalizedRows = rows.map(row => {
+      const normalizedRow = {};
+      Object.keys(row).forEach(key => {
+        // Convert UPPERCASE to PascalCase for common columns
+        const pascalKey = key.charAt(0).toUpperCase() + key.slice(1).toLowerCase();
         normalizedRow[pascalKey] = row[key];
       });
       return normalizedRow;
@@ -1802,6 +1813,7 @@ app.post('/api/test-connection-by-name', async (req, res) => {
       user: connectionConfig.connection?.user || connectionConfig.user,
       password: connectionConfig.connection?.password || connectionConfig.password,
       port: connectionConfig.connection?.port || connectionConfig.port,
+      connectString: connectionConfig.connection?.connectString || connectionConfig.connectString,
       options: {
         ...connectionConfig.options,
         ...connectionConfig.connection?.options
@@ -1852,8 +1864,26 @@ app.post('/api/test-connection-by-name', async (req, res) => {
         console.error('❌ SQL Server connection test failed for:', connectionName, error.message);
         return res.json({ success: false, error: error.message });
       }
+    } else if (flatConfig.client === 'oracledb') {
+      // Handle Oracle connections specifically
+      let connectionObj = {
+        user: flatConfig.user,
+        password: flatConfig.password
+      };
+      
+      if (flatConfig.connectString) {
+        connectionObj.connectString = flatConfig.connectString;
+      } else {
+        // Build connectString from components
+        const host = flatConfig.host || 'localhost';
+        const port = flatConfig.port || 1521;
+        const service = flatConfig.database || flatConfig.service || 'XE';
+        connectionObj.connectString = `${host}:${port}/${service}`;
+      }
+      
+      testConfig.connection = connectionObj;
     } else {
-      // For other database types (MySQL, PostgreSQL, Oracle)
+      // For other database types (MySQL, PostgreSQL)
       testConfig.connection = {
         host: flatConfig.host,
         database: flatConfig.database,
@@ -1873,7 +1903,13 @@ app.post('/api/test-connection-by-name', async (req, res) => {
     
     // Test the connection
     const testDb = knex(testConfig);
-    await testDb.raw('SELECT 1');
+    
+    // Use appropriate test query based on database type
+    if (flatConfig.client === 'oracledb') {
+      await testDb.raw('SELECT 1 FROM DUAL');
+    } else {
+      await testDb.raw('SELECT 1');
+    }
     await testDb.destroy();
     
     console.log('✅ Connection test successful for:', connectionName);

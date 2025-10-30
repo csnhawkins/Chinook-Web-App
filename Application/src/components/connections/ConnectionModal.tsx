@@ -173,15 +173,23 @@ const ConnectionModal: React.FC<ConnectionModalProps> = ({
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Database Name
+              {config.client === 'oracledb' ? 'Connect String' : 'Database Name'}
             </label>
             <input
               type="text"
-              value={conn.database || ''}
-              onChange={(e) => updateConnection('connection.database', e.target.value)}
+              value={config.client === 'oracledb' ? (conn.connectString || '') : (conn.database || '')}
+              onChange={(e) => updateConnection(
+                config.client === 'oracledb' ? 'connection.connectString' : 'connection.database', 
+                e.target.value
+              )}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              placeholder="Enter database name"
+              placeholder={config.client === 'oracledb' ? 'e.g., localhost:1521/PDBPROD' : 'Enter database name'}
             />
+            {config.client === 'oracledb' && (
+              <p className="text-xs text-gray-500 mt-1">
+                Format: host:port/service_name (e.g., localhost:1521/PDBPROD)
+              </p>
+            )}
           </div>
 
           {/* Authentication */}
