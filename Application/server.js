@@ -1984,15 +1984,31 @@ app.post('/api/update-connection', async (req, res) => {
 app.post('/api/customers', async (req, res) => {
   const db = getDb(req.query.conn);
   const start = Date.now();
+  
+  // Get config outside try block so it's accessible in catch block
+  const tableName = getTableName('Customer', req.query.conn);
+  const currentConnections = getConnections();
+  const config = currentConnections[req.query.conn] || currentConnections[defaultConnection];
+  
   try {
-    const { firstName, lastName, company, address, city, state, country, postalCode, phone, fax, email, supportRepId } = req.body;
+    const { 
+      FirstName: firstName, 
+      LastName: lastName, 
+      Email: email,
+      Company: company, 
+      Address: address, 
+      City: city, 
+      State: state, 
+      Country: country, 
+      PostalCode: postalCode, 
+      Phone: phone, 
+      Fax: fax,
+      SupportRepId: supportRepId 
+    } = req.body;
     
     console.log(`➡️ Creating customer via connection: ${req.query.conn}`);
     console.log(`📝 Customer data:`, req.body);
-    
-    const tableName = getTableName('Customer', req.query.conn);
-    const currentConnections = getConnections();
-    const config = currentConnections[req.query.conn] || currentConnections[defaultConnection];
+    console.log(`🔧 Extracted fields:`, { firstName, lastName, email, company, address, city, state, country, postalCode, phone, fax, supportRepId });
     
     console.log(`🔧 Database config - Client: ${config.client}, Table: ${tableName}`);
     
