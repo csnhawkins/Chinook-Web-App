@@ -114,9 +114,12 @@ app.use(express.static(path.join(__dirname, 'dist')));
 // --- DB Connections ---
 import connections from "./connections.js";
 
-// Hot-reload functionality for connections.js
+// Hot-reload functionality for connections.js and frontend updates
 let currentConnections = { ...connections };
 let connectionsFileWatcher = null;
+let frontendFileWatcher = null;
+let gitWatcher = null;
+let rebuilding = false;
 
 function reloadConnections() {
   try {
@@ -146,14 +149,67 @@ function reloadConnections() {
   }
 }
 
-// Setup file watcher for connections.js (only if chokidar is available)
+// Auto-rebuild frontend when source files change
+async function rebuildFrontend(reason = 'file change') {
+  if (rebuilding) {
+    console.log('🔄 Frontend rebuild already in progress, skipping...');
+    return;
+  }
+  
+  rebuilding = true;
+  console.log(`🔄 Frontend rebuild triggered by: ${reason}`);
+  console.log('🏗️ Building React frontend...');
+  
+  try {
+    const { spawn } = await import('child_process');
+    
+    const buildProcess = spawn('npm', ['run', 'build'], {
+      cwd: __dirname,
+      stdio: 'pipe'
+    });
+    
+    let buildOutput = '';
+    let buildError = '';
+    
+    buildProcess.stdout.on('data', (data) => {
+      buildOutput += data.toString();
+    });
+    
+    buildProcess.stderr.on('data', (data) => {
+      buildError += data.toString();
+    });
+    
+    buildProcess.on('close', (code) => {
+      if (code === 0) {
+        console.log('✅ Frontend rebuild completed successfully');
+        console.log('🚀 New frontend changes are now live!');
+      } else {
+        console.error('❌ Frontend build failed:');
+        console.error(buildError || buildOutput);
+      }
+      rebuilding = false;
+    });
+    
+    buildProcess.on('error', (err) => {
+      console.error('❌ Failed to start frontend build:', err.message);
+      rebuilding = false;
+    });
+    
+  } catch (err) {
+    console.error('❌ Frontend rebuild error:', err.message);
+    rebuilding = false;
+  }
+}
+
+// Setup file watcher for connections.js and frontend files (only if chokidar is available)
 function setupFileWatcher() {
   if (!fileWatchingEnabled || !chokidar) {
-    console.log('📁 File watching disabled - connections.js changes require manual restart');
+    console.log('📁 File watching disabled - changes require manual restart');
     return;
   }
 
   try {
+    // Watch connections.js for database config changes
     connectionsFileWatcher = chokidar.watch('./connections.js', {
       ignored: /^\./, 
       persistent: true,
@@ -165,7 +221,36 @@ function setupFileWatcher() {
       setTimeout(reloadConnections, 100); // Small delay to ensure file write is complete
     });
 
-    console.log('🔍 File watcher setup for connections.js');
+    // Watch frontend source files for changes
+    frontendFileWatcher = chokidar.watch(['./src/**/*', './public/**/*', './index.html', './vite.config.ts', './tsconfig.json'], {
+      ignored: [/node_modules/, /\.git/, /dist/, /^\./, /\.log$/],
+      persistent: true,
+      ignoreInitial: true
+    });
+
+    frontendFileWatcher.on('change', (filePath) => {
+      console.log(`� Frontend file changed: ${filePath}`);
+      setTimeout(() => rebuildFrontend(`change in ${filePath}`), 500); // Delay to batch changes
+    });
+
+    // Watch for git changes (indicates git pull)
+    gitWatcher = chokidar.watch(['./.git/refs/heads/**', './.git/HEAD'], {
+      persistent: true,
+      ignoreInitial: true
+    });
+
+    gitWatcher.on('change', (filePath) => {
+      console.log(`🔄 Git change detected: ${filePath}`);
+      setTimeout(() => {
+        console.log('🌍 Git pull detected - rebuilding frontend...');
+        rebuildFrontend('git pull detected');
+      }, 1000); // Longer delay for git operations
+    });
+
+    console.log('�🔍 File watchers setup for:');
+    console.log('  • connections.js (config reload)');
+    console.log('  • Frontend source files (auto-rebuild)');
+    console.log('  • Git changes (auto-rebuild after pull)');
   } catch (err) {
     console.error('❌ Failed to setup file watcher:', err.message);
     fileWatchingEnabled = false;
@@ -3455,11 +3540,49 @@ app.post('/api/system/restart', async (req, res) => {
   }
 });
 
+// Manual frontend rebuild endpoint (useful for git pull automation)
+app.post('/api/rebuild-frontend', async (req, res) => {
+  try {
+    console.log('🔧 Manual frontend rebuild requested');
+    
+    // Trigger rebuild without waiting for completion
+    rebuildFrontend('manual rebuild request');
+    
+    res.json({ 
+      success: true, 
+      message: 'Frontend rebuild started',
+      timestamp: new Date().toISOString()
+    });
+  } catch (err) {
+    console.error('❌ Manual rebuild failed:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // Catch-all handler for React Router (must be after all API routes)
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 
+// Graceful shutdown cleanup
+process.on('SIGTERM', () => {
+  console.log('📤 SIGTERM received, cleaning up...');
+  if (connectionsFileWatcher) connectionsFileWatcher.close();
+  if (frontendFileWatcher) frontendFileWatcher.close();
+  if (gitWatcher) gitWatcher.close();
+  process.exit(0);
+});
+
+process.on('SIGINT', () => {
+  console.log('📤 SIGINT received, cleaning up...');
+  if (connectionsFileWatcher) connectionsFileWatcher.close();
+  if (frontendFileWatcher) frontendFileWatcher.close();
+  if (gitWatcher) gitWatcher.close();
+  process.exit(0);
+});
+
 app.listen(3001, () => {
   console.log("🚀 Backend running on http://localhost:3001");
+  console.log("🔧 Auto-rebuild enabled for frontend changes");
+  console.log("🌍 Git pull detection active");
 });

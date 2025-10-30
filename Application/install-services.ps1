@@ -240,7 +240,17 @@ Write-Host "Final service status check:" -ForegroundColor Yellow
 & $nssmPath status $backendName
 
 Write-Host ""
-Write-Host "Access the application at: http://localhost:3001" -ForegroundColor Yellow
+Write-Host "🌐 Access the application at: http://localhost:3001" -ForegroundColor Yellow
+Write-Host ""
+Write-Host "🚀 AUTO-UPDATE FEATURES ENABLED:" -ForegroundColor Green
+Write-Host "  • File watching for automatic frontend rebuilds" -ForegroundColor White
+Write-Host "  • Git pull detection and auto-rebuild" -ForegroundColor White
+Write-Host "  • Manual update via: .\auto-update.ps1" -ForegroundColor White
+Write-Host "  • Quick update via: .\quick-update.bat" -ForegroundColor White
+Write-Host ""
+Write-Host "🔧 Demo VM Setup:" -ForegroundColor Yellow
+Write-Host "  For automatic git pull updates, run:" -ForegroundColor White
+Write-Host "  .\setup-scheduled-update.ps1" -ForegroundColor White
 Write-Host ""
 Write-Host "The Express server now serves both the API and the built React frontend." -ForegroundColor White
 Write-Host "The React app is built and served from the /dist directory." -ForegroundColor White
