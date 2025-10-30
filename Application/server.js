@@ -294,16 +294,28 @@ function getDb(env) {
     } else if (config.client === 'oracledb') {
       // Handle Oracle configuration
       const conn = config.connection || config;
+      
+      // Oracle connection logic:
+      // 1. If connectString is provided, use it directly
+      // 2. If host/port/database are provided, build connectString
+      let connectionConfig = {
+        user: conn.user,
+        password: conn.password
+      };
+      
+      if (conn.connectString) {
+        connectionConfig.connectString = conn.connectString;
+      } else {
+        // Build connectString from components
+        const host = conn.host || 'localhost';
+        const port = conn.port || 1521;
+        const service = conn.database || conn.service || 'XE';
+        connectionConfig.connectString = `${host}:${port}/${service}`;
+      }
+      
       knexConfig = {
         client: 'oracledb',
-        connection: {
-          host: conn.host || 'localhost',
-          port: conn.port || 1521,
-          database: conn.database,
-          user: conn.user,
-          password: conn.password,
-          connectString: conn.connectString
-        }
+        connection: connectionConfig
       };
     }
     
@@ -1710,19 +1722,36 @@ app.post('/api/test-connection', async (req, res) => {
         database: connectionConfig.database
       };
     } else if (connectionConfig.client === 'oracledb') {
-      testConfig.connection = {
-        host: connectionConfig.host,
-        port: connectionConfig.port ? parseInt(connectionConfig.port) : 1521,
+      // Oracle connection logic:
+      // 1. If connectString is provided, use it directly
+      // 2. If host/port/database are provided, build connectString
+      let connectionObj = {
         user: connectionConfig.user,
-        password: connectionConfig.password,
-        database: connectionConfig.database
+        password: connectionConfig.password
       };
+      
+      if (connectionConfig.connectString) {
+        connectionObj.connectString = connectionConfig.connectString;
+      } else {
+        // Build connectString from components
+        const host = connectionConfig.host || 'localhost';
+        const port = connectionConfig.port || 1521;
+        const service = connectionConfig.database || connectionConfig.service || 'XE';
+        connectionObj.connectString = `${host}:${port}/${service}`;
+      }
+      
+      testConfig.connection = connectionObj;
     }
     
     const testDb = knex(testConfig);
     
     // Try a simple query to test the connection
-    await testDb.raw('SELECT 1');
+    // Oracle requires "FROM DUAL" for simple SELECT queries
+    if (connectionConfig.client === 'oracledb') {
+      await testDb.raw('SELECT 1 FROM DUAL');
+    } else {
+      await testDb.raw('SELECT 1');
+    }
     
     // Clean up the test connection
     await testDb.destroy();

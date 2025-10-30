@@ -175,7 +175,18 @@ const ConnectionsPage: React.FC = () => {
     
     const port = (conn as any).port ? `:${(conn as any).port}` : '';
     const database = (conn as any).database;
-    return `${host}${port}/${database}`;
+    
+    // Handle Oracle differently - show connectString if available, or host:port/service
+    if (config.client === 'oracledb') {
+      const connectString = (conn as any).connectString;
+      if (connectString) {
+        return connectString;
+      }
+      // If no database/service specified, show default XE
+      return `${host}${port}/${database || 'XE'}`;
+    }
+    
+    return `${host}${port}/${database || ''}`;
   };
 
   const ConnectionCard = ({ name, config }: { name: string, config: DatabaseConnection }) => {
