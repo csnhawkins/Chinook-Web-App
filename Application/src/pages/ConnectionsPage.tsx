@@ -242,14 +242,13 @@ const ConnectionsPage: React.FC = () => {
           <div className="flex items-start justify-between mb-4">
             <div className="flex items-center space-x-3">
               <div className={`p-2 rounded-lg ${getEnvironmentColors(environment)}`}>
-                <Database className="h-5 w-5" />
+                {getDatabaseIcon(config.client)}
               </div>
               <div>
                 <h3 className="font-semibold text-gray-900">
                   {config.displayName || name}
                 </h3>
                 <div className="flex items-center space-x-2 text-sm text-gray-500">
-                  {getDatabaseIcon(config.client)}
                   <span>{getClientDisplayName(config.client)}</span>
                 </div>
               </div>

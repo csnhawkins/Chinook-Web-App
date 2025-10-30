@@ -476,17 +476,17 @@ app.get('/api/invoices', async (req, res) => {
 
     // Format the results with customer names
     const formattedInvoices = rows.map(row => ({
-      InvoiceId: row.InvoiceId || row.INVOICEID,
-      CustomerId: row.CustomerId || row.CUSTOMERID, 
-      InvoiceDate: row.InvoiceDate || row.INVOICEDATE,
-      BillingAddress: row.BillingAddress || row.BILLINGADDRESS,
-      BillingCity: row.BillingCity || row.BILLINGCITY,
-      BillingState: row.BillingState || row.BILLINGSTATE,
-      BillingCountry: row.BillingCountry || row.BILLINGCOUNTRY,
-      BillingPostalCode: row.BillingPostalCode || row.BILLINGPOSTALCODE,
-      Total: row.Total || row.TOTAL,
-      CustomerName: `${row.CustomerFirstName || row.CUSTOMERFIRSTNAME || ''} ${row.CustomerLastName || row.CUSTOMERLASTNAME || ''}`.trim() || 'Unknown Customer',
-      CustomerEmail: row.CustomerEmail || row.CUSTOMEREMAIL
+      InvoiceId: row.InvoiceId || row.INVOICEID || row.invoice_id,
+      CustomerId: row.CustomerId || row.CUSTOMERID || row.customer_id, 
+      InvoiceDate: row.InvoiceDate || row.INVOICEDATE || row.invoice_date,
+      BillingAddress: row.BillingAddress || row.BILLINGADDRESS || row.billing_address,
+      BillingCity: row.BillingCity || row.BILLINGCITY || row.billing_city,
+      BillingState: row.BillingState || row.BILLINGSTATE || row.billing_state,
+      BillingCountry: row.BillingCountry || row.BILLINGCOUNTRY || row.billing_country,
+      BillingPostalCode: row.BillingPostalCode || row.BILLINGPOSTALCODE || row.billing_postal_code,
+      Total: row.Total || row.TOTAL || row.total,
+      CustomerName: `${row.CustomerFirstName || row.CUSTOMERFIRSTNAME || row.customerfirstname || ''} ${row.CustomerLastName || row.CUSTOMERLASTNAME || row.customerlastname || ''}`.trim() || 'Unknown Customer',
+      CustomerEmail: row.CustomerEmail || row.CUSTOMEREMAIL || row.customeremail
     }));
 
     console.log(`✅ Invoices query OK: ${formattedInvoices.length} rows of ${totalRows} in ${timeMs}ms (conn: ${conn})`);
@@ -531,6 +531,7 @@ app.get('/api/artists', async (req, res) => {
     const albumArtistIdCol = getColName('ArtistId', conn);
 
     console.log(`🔍 Artist columns - Table: ${artistTable}, Album: ${albumTable}, DB Type: ${dbType}`);
+    console.log(`🔍 Artist ID column: ${artistIdCol}, Album Artist ID: ${albumArtistIdCol}`);
 
     // Build query with album count - simpler approach
     let query = db(`${artistTable} as ar`)
@@ -538,7 +539,7 @@ app.get('/api/artists', async (req, res) => {
       .select([
         `ar.${artistIdCol} as ArtistId`,
         `ar.${artistNameCol} as Name`,
-        db.raw(`COUNT(al.${albumArtistIdCol}) as AlbumCount`)
+        db.raw(`COUNT("al"."${albumArtistIdCol}") as AlbumCount`)
       ])
       .groupBy(`ar.${artistIdCol}`, `ar.${artistNameCol}`);
 
@@ -594,8 +595,8 @@ app.get('/api/artists', async (req, res) => {
         const trackResults = await trackCountQuery;
         
         trackResults.forEach(result => {
-          const artistId = result.ArtistId || result.ARTISTID;
-          const trackCount = parseInt(result.TrackCount || result.TRACKCOUNT || 0, 10);
+          const artistId = result.ArtistId || result.ARTISTID || result.artistid;
+          const trackCount = parseInt(result.TrackCount || result.TRACKCOUNT || result.trackcount || 0, 10);
           trackCounts[artistId] = trackCount;
         });
       } catch (err) {
@@ -605,11 +606,11 @@ app.get('/api/artists', async (req, res) => {
 
     // Format the results
     const formattedArtists = rows.map(row => {
-      const artistId = row.ArtistId || row.ARTISTID;
+      const artistId = row.ArtistId || row.ARTISTID || row.artistid;
       return {
         ArtistId: artistId,
-        Name: row.Name || row.NAME,
-        AlbumCount: parseInt(row.AlbumCount || row.ALBUMCOUNT || 0, 10),
+        Name: row.Name || row.NAME || row.name,
+        AlbumCount: parseInt(row.AlbumCount || row.ALBUMCOUNT || row.albumcount || 0, 10),
         TrackCount: trackCounts[artistId] || 0
       };
     });
@@ -1388,7 +1389,12 @@ function getColName(col, conn) {
       Name: 'name',
       Title: 'title',
       AlbumId: 'album_id',
-      ArtistId: 'artist_id'
+      ArtistId: 'artist_id',
+      BillingAddress: 'billing_address',
+      BillingCity: 'billing_city',
+      BillingState: 'billing_state',
+      BillingCountry: 'billing_country',
+      BillingPostalCode: 'billing_postal_code'
     };
     return map[col] || col.toLowerCase();
   }
@@ -1409,7 +1415,15 @@ function getColName(col, conn) {
       Milliseconds: 'MILLISECONDS',
       UnitPrice: 'UNITPRICE',
       Quantity: 'QUANTITY',
-      Name: 'NAME'
+      Name: 'NAME',
+      Title: 'TITLE',
+      AlbumId: 'ALBUMID',
+      ArtistId: 'ARTISTID',
+      BillingAddress: 'BILLINGADDRESS',
+      BillingCity: 'BILLINGCITY',
+      BillingState: 'BILLINGSTATE',
+      BillingCountry: 'BILLINGCOUNTRY',
+      BillingPostalCode: 'BILLINGPOSTALCODE'
     };
     return map[col] || col.toUpperCase();
   }
