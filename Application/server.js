@@ -964,6 +964,38 @@ function getColName(col, conn) {
   }
   return col;
 }
+
+// Helper to convert snake_case to PascalCase
+function snakeToPascalCase(str) {
+  const commonMappings = {
+    'customer_id': 'CustomerId',
+    'first_name': 'FirstName',
+    'last_name': 'LastName',
+    'email': 'Email',
+    'company': 'Company',
+    'address': 'Address',
+    'city': 'City',
+    'state': 'State',
+    'country': 'Country',
+    'postal_code': 'PostalCode',
+    'phone': 'Phone',
+    'fax': 'Fax',
+    'support_rep_id': 'SupportRepId',
+    'invoice_id': 'InvoiceId',
+    'invoice_date': 'InvoiceDate',
+    'billing_address': 'BillingAddress',
+    'billing_city': 'BillingCity',
+    'billing_state': 'BillingState',
+    'billing_country': 'BillingCountry',
+    'billing_postal_code': 'BillingPostalCode',
+    'total': 'Total'
+  };
+  
+  // Use mapping if available, otherwise convert snake_case to PascalCase
+  return commonMappings[str] || str.split('_')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join('');
+}
 // Helper to get correct table name for each DB type
 function getTableName(table, conn) {
   const currentConnections = getConnections();
@@ -1230,8 +1262,23 @@ app.get('/api/table/:table', async (req, res) => {
     totalRows = parseInt(countRes.total, 10);
   }
   const columns = await db(mappedTable).columnInfo();
+  
+  // Normalize column names for PostgreSQL to match frontend expectations
+  let normalizedRows = rows;
+  if (config.client === 'pg') {
+    normalizedRows = rows.map(row => {
+      const normalizedRow = {};
+      Object.keys(row).forEach(key => {
+        // Convert snake_case to PascalCase for common columns
+        const pascalKey = snakeToPascalCase(key);
+        normalizedRow[pascalKey] = row[key];
+      });
+      return normalizedRow;
+    });
+  }
+  
   logWithTimestamp(`✅ ${table} query OK: ${rows.length} rows of ${totalRows} in ${timeMs} ms (conn: ${conn})`);
-  res.json({ rows, columns, rowCount: rows.length, totalRows, timeMs });
+  res.json({ rows: normalizedRows, columns, rowCount: normalizedRows.length, totalRows, timeMs });
   } catch (err) {
     console.error(`❌ Table ${table} query error:`, err.message);
     console.error(`❌ Query details: offset=${offset}, limit=${limit}, search="${search}", conn=${conn}`);
