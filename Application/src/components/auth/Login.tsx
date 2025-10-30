@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { User, Lock, Shield, Eye } from 'lucide-react';
+import { User, Lock, Shield, Eye, Lightbulb, AlertTriangle } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { User as UserType } from '../../types';
 
@@ -197,12 +197,14 @@ const Login: React.FC = () => {
           </form>
 
           <div className="mt-6 text-center">
-            <p className="text-xs text-gray-500">
-              💡 Use any username and password to login
+            <p className="text-xs text-gray-500 flex items-center">
+              <Lightbulb className="h-3 w-3 mr-1" />
+              Use any username and password to login
             </p>
             {adminMode && (
-              <p className="text-xs text-warning-600 mt-1">
-                ⚠️ Admin mode allows adding, editing, and deleting records
+              <p className="text-xs text-warning-600 mt-1 flex items-center">
+                <AlertTriangle className="h-3 w-3 mr-1" />
+                Admin mode allows adding, editing, and deleting records
               </p>
             )}
           </div>

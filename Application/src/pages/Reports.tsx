@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { Search, FileText, User, MapPin, CreditCard, Music, Calendar, DollarSign } from 'lucide-react';
+import { Search, FileText, User, MapPin, CreditCard, Music, Calendar, DollarSign, Zap, AlertTriangle, Snail } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 
@@ -303,11 +303,20 @@ const Reports: React.FC = () => {
                     <div className="flex items-center gap-2">
                       <span>Execution time: <span className="font-mono">{performanceInfo.timeMs}ms</span></span>
                       {performanceInfo.timeMs <= 100 ? (
-                        <span className="text-green-600 text-xs bg-green-100 px-2 py-1 rounded">⚡ Fast</span>
+                        <span className="text-green-600 text-xs bg-green-100 px-2 py-1 rounded flex items-center">
+                          <Zap className="h-3 w-3 mr-1" />
+                          Fast
+                        </span>
                       ) : performanceInfo.timeMs <= 500 ? (
-                        <span className="text-yellow-600 text-xs bg-yellow-100 px-2 py-1 rounded">⚠️ Moderate</span>
+                        <span className="text-yellow-600 text-xs bg-yellow-100 px-2 py-1 rounded flex items-center">
+                          <AlertTriangle className="h-3 w-3 mr-1" />
+                          Moderate
+                        </span>
                       ) : (
-                        <span className="text-red-600 text-xs bg-red-100 px-2 py-1 rounded">🐌 Slow - Needs optimization</span>
+                        <span className="text-red-600 text-xs bg-red-100 px-2 py-1 rounded flex items-center">
+                          <Snail className="h-3 w-3 mr-1" />
+                          Slow - Needs optimization
+                        </span>
                       )}
                     </div>
                   )}

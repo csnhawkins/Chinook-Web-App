@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { useNavigate } from 'react-router-dom';
-import { BarChart3, Users, Disc3, TrendingUp, Loader2, RefreshCw } from 'lucide-react';
+import { BarChart3, Users, Disc3, TrendingUp, Loader2, RefreshCw, CheckCircle, AlertTriangle } from 'lucide-react';
 import { DashboardService } from '../services/dashboardService';
 
 const Dashboard: React.FC = () => {
@@ -145,7 +145,7 @@ const Dashboard: React.FC = () => {
         <div className="bg-warning-50 border border-warning-200 rounded-lg p-4">
           <div className="flex items-center">
             <div className="flex-shrink-0">
-              <div className="h-5 w-5 text-warning-400">⚠️</div>
+              <AlertTriangle className="h-5 w-5 text-warning-400" />
             </div>
             <div className="ml-3">
               <h3 className="text-sm font-medium text-warning-800">
@@ -239,9 +239,9 @@ const Dashboard: React.FC = () => {
                   {loading ? (
                     <Loader2 className="h-6 w-6 animate-spin inline" />
                   ) : hasData ? (
-                    '✅'
+                    <CheckCircle className="h-6 w-6 text-green-500 inline" />
                   ) : (
-                    '⚠️'
+                    <AlertTriangle className="h-6 w-6 text-yellow-500 inline" />
                   )}
                 </p>
               </div>

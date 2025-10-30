@@ -664,7 +664,7 @@ const Tutorials: React.FC = () => {
                           ? 'bg-green-600 text-white shadow-md' 
                           : 'bg-gray-300 text-gray-600'
                       }`}>
-                        {step.completed ? '✓' : index + 1}
+                        {step.completed ? <CheckCircle className="h-4 w-4" /> : index + 1}
                       </div>
                       <div className="flex-1">
                         <h4 className="font-semibold text-gray-900 mb-1">{step.title}</h4>

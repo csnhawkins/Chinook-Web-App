@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Database, Settings, Loader2, Edit, TestTube, Filter } from 'lucide-react';
+import { Database, Settings, Loader2, Edit, TestTube, Filter, CheckCircle, XCircle, AlertTriangle } from 'lucide-react';
 import { DatabaseConnection } from '../types';
 import { ConnectionService } from '../services/connectionService';
 import { useApp } from '../context/AppContext';
@@ -60,9 +60,9 @@ const ConnectionsPage: React.FC = () => {
       }));
       
       if (result.success) {
-        addNotification('success', `✅ Connection "${name}" tested successfully`);
+        addNotification('success', `Connection "${name}" tested successfully`);
       } else {
-        addNotification('error', `❌ Connection test failed: ${result.message || 'Unknown error'}`);
+        addNotification('error', `Connection test failed: ${result.message || 'Unknown error'}`);
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
@@ -70,7 +70,7 @@ const ConnectionsPage: React.FC = () => {
         ...prev,
         [name]: { success: false, timestamp: Date.now() }
       }));
-      addNotification('error', `❌ Failed to test connection "${name}": ${errorMessage}`);
+      addNotification('error', `Failed to test connection "${name}": ${errorMessage}`);
       console.error('Error testing connection:', error);
     } finally {
       setTestingConnection(null);
@@ -253,19 +253,36 @@ const ConnectionsPage: React.FC = () => {
             </div>
             <div className="flex items-center text-sm">
               <span className="text-gray-500 w-16">Auth:</span>
-              <span className={`text-sm ${config.hasPassword || config.connection?.hasPassword ? 'text-green-600' : 'text-amber-600'}`}>
-                {config.hasPassword || config.connection?.hasPassword ? 
-                  '🔒 Password securely stored' : 
-                  '⚠️ No password configured'
-                }
+              <span className={`text-sm flex items-center ${config.hasPassword || config.connection?.hasPassword ? 'text-green-600' : 'text-amber-600'}`}>
+                {config.hasPassword || config.connection?.hasPassword ? (
+                  <>
+                    <CheckCircle className="h-3 w-3 mr-1" />
+                    Password securely stored
+                  </>
+                ) : (
+                  <>
+                    <AlertTriangle className="h-3 w-3 mr-1" />
+                    No password configured
+                  </>
+                )}
               </span>
             </div>
             {/* Show test result feedback */}
             {hasRecentTestResult && testResult && (
               <div className="flex items-center text-sm">
                 <span className="text-gray-500 w-16">Status:</span>
-                <span className={`text-sm font-medium ${testResult.success ? 'text-green-600' : 'text-red-600'}`}>
-                  {testResult.success ? '✅ Test passed' : '❌ Test failed'}
+                <span className={`text-sm font-medium flex items-center ${testResult.success ? 'text-green-600' : 'text-red-600'}`}>
+                  {testResult.success ? (
+                    <>
+                      <CheckCircle className="h-4 w-4 mr-1" />
+                      Test passed
+                    </>
+                  ) : (
+                    <>
+                      <XCircle className="h-4 w-4 mr-1" />
+                      Test failed
+                    </>
+                  )}
                 </span>
               </div>
             )}
@@ -300,13 +317,13 @@ const ConnectionsPage: React.FC = () => {
               ) : hasRecentTestResult && testResult ? (
                 testResult.success ? (
                   <>
-                    <TestTube className="h-4 w-4 mr-1" />
-                    ✅ Passed
+                    <CheckCircle className="h-4 w-4 mr-1 text-green-600" />
+                    Passed
                   </>
                 ) : (
                   <>
-                    <TestTube className="h-4 w-4 mr-1" />
-                    ❌ Failed
+                    <XCircle className="h-4 w-4 mr-1 text-red-600" />
+                    Failed
                   </>
                 )
               ) : (

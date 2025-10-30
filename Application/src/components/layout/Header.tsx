@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { useNavigate } from 'react-router-dom';
-import { Menu, Settings, GraduationCap, LogOut, User, Database, HelpCircle, X } from 'lucide-react';
+import { Menu, Settings, GraduationCap, LogOut, User, Database, HelpCircle, X, BarChart3, Palette, Wrench, Settings as SettingsIcon, FolderOpen, Users, Music, FileText, Rocket, Smartphone, Link } from 'lucide-react';
 import ConnectionSwitcher from '../connections/ConnectionSwitcher';
 
 interface HeaderProps {
@@ -256,10 +256,10 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
                   <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">Latest</span>
                 </div>
                 <div className="text-sm text-gray-600 space-y-1">
-                  <div>🚀 <strong>Enhanced Login:</strong> Added quick login buttons for AdminUser and ReadOnly access</div>
-                  <div>📱 <strong>Responsive Header:</strong> Optimized layout for narrow screens and side-by-side comparisons</div>
-                  <div>🔗 <strong>Updated Links:</strong> GitHub repository link updated to new location</div>
-                  <div>🎨 <strong>UI Polish:</strong> Improved spacing and text sizing for better mobile experience</div>
+                  <div className="flex items-center"><Rocket className="h-4 w-4 mr-2" /> <strong>Enhanced Login:</strong> Added quick login buttons for AdminUser and ReadOnly access</div>
+                  <div className="flex items-center"><Smartphone className="h-4 w-4 mr-2" /> <strong>Responsive Header:</strong> Optimized layout for narrow screens and side-by-side comparisons</div>
+                  <div className="flex items-center"><Link className="h-4 w-4 mr-2" /> <strong>Updated Links:</strong> GitHub repository link updated to new location</div>
+                  <div className="flex items-center"><Palette className="h-4 w-4 mr-2" /> <strong>UI Polish:</strong> Improved spacing and text sizing for better mobile experience</div>
                 </div>
               </div>
 
@@ -269,10 +269,10 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
                   <h4 className="font-semibold text-gray-900">Version 2.1.0</h4>
                 </div>
                 <div className="text-sm text-gray-600 space-y-1">
-                  <div>📊 <strong>Performance Monitoring:</strong> Added real-time query performance indicators</div>
-                  <div>🎨 <strong>UI Improvements:</strong> Enhanced admin settings with immediate feedback</div>
-                  <div>🔧 <strong>Bug Fixes:</strong> Fixed tracks pagination and Reports auto-population</div>
-                  <div>⚙️ <strong>Settings:</strong> Site name and logo customization with live preview</div>
+                  <div className="flex items-center"><BarChart3 className="h-4 w-4 mr-2" /> <strong>Performance Monitoring:</strong> Added real-time query performance indicators</div>
+                  <div className="flex items-center"><Palette className="h-4 w-4 mr-2" /> <strong>UI Improvements:</strong> Enhanced admin settings with immediate feedback</div>
+                  <div className="flex items-center"><Wrench className="h-4 w-4 mr-2" /> <strong>Bug Fixes:</strong> Fixed tracks pagination and Reports auto-population</div>
+                  <div className="flex items-center"><SettingsIcon className="h-4 w-4 mr-2" /> <strong>Settings:</strong> Site name and logo customization with live preview</div>
                 </div>
               </div>
 
@@ -283,7 +283,7 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
                   <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">Major</span>
                 </div>
                 <div className="text-sm text-gray-600 space-y-1">
-                  <div>🚀 <strong>Complete Modernization:</strong> Migrated from vanilla HTML/JS to React + TypeScript</div>
+                  <div className="flex items-center"><Rocket className="h-4 w-4 mr-2" /> <strong>Complete Modernization:</strong> Migrated from vanilla HTML/JS to React + TypeScript</div>
                   <div>📚 <strong>Tutorial System:</strong> Interactive quest-based learning with progress tracking</div>
                   <div>📈 <strong>Advanced Reports:</strong> Cross-table joins with detailed invoice analysis</div>
                   <div>👨‍💼 <strong>Admin Mode:</strong> Role-based access control with viewer restrictions</div>
@@ -297,10 +297,10 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
                   <h4 className="font-semibold text-gray-900">Version 1.5.0</h4>
                 </div>
                 <div className="text-sm text-gray-600 space-y-1">
-                  <div>🗃️ <strong>Multi-Database Support:</strong> PostgreSQL, MySQL, Oracle, SQL Server</div>
-                  <div>👥 <strong>Customer Management:</strong> Full CRUD operations with search</div>
-                  <div>🎵 <strong>Music Catalog:</strong> Track and album browsing</div>
-                  <div>📄 <strong>Invoice System:</strong> Basic invoice management</div>
+                  <div className="flex items-center"><FolderOpen className="h-4 w-4 mr-2" /> <strong>Multi-Database Support:</strong> PostgreSQL, MySQL, Oracle, SQL Server</div>
+                  <div className="flex items-center"><Users className="h-4 w-4 mr-2" /> <strong>Customer Management:</strong> Full CRUD operations with search</div>
+                  <div className="flex items-center"><Music className="h-4 w-4 mr-2" /> <strong>Music Catalog:</strong> Track and album browsing</div>
+                  <div className="flex items-center"><FileText className="h-4 w-4 mr-2" /> <strong>Invoice System:</strong> Basic invoice management</div>
                 </div>
               </div>
             </div>

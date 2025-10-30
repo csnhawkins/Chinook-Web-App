@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Settings as SettingsIcon, Database, Image, Globe, ToggleLeft, ToggleRight, Info, LogOut } from 'lucide-react';
+import { Settings as SettingsIcon, Database, Image, Globe, ToggleLeft, ToggleRight, Info, LogOut, Snail } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { DatabaseConnection } from '../types';
 
@@ -300,8 +300,9 @@ const Settings: React.FC = () => {
                 </div>
                 <div className="text-sm text-gray-600">
                   {slowPerformanceMode ? (
-                    <span className="text-orange-600">
-                      🐌 Reports will use slower stored procedures for demo purposes
+                    <span className="text-orange-600 flex items-center">
+                      <Snail className="h-4 w-4 mr-1" />
+                      Reports will use slower stored procedures for demo purposes
                     </span>
                   ) : (
                     'Reports use optimized queries for fast performance'
