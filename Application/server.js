@@ -1994,59 +1994,78 @@ app.post('/api/customers', async (req, res) => {
     const currentConnections = getConnections();
     const config = currentConnections[req.query.conn] || currentConnections[defaultConnection];
     
+    console.log(`🔧 Database config - Client: ${config.client}, Table: ${tableName}`);
+    
     let result;
     if (config.client === 'pg') {
       // PostgreSQL
-      result = await db(tableName).insert({
+      const insertData = {
         first_name: firstName,
         last_name: lastName,
-        company: company || null,
-        address: address || null,
-        city: city || null,
-        state: state || null,
-        country: country || null,
-        postal_code: postalCode || null,
-        phone: phone || null,
-        fax: fax || null,
         email: email,
+        company: company && company.trim() !== '' ? company : null,
+        address: address && address.trim() !== '' ? address : null,
+        city: city && city.trim() !== '' ? city : null,
+        state: state && state.trim() !== '' ? state : null,
+        country: country && country.trim() !== '' ? country : null,
+        postal_code: postalCode && postalCode.trim() !== '' ? postalCode : null,
+        phone: phone && phone.trim() !== '' ? phone : null,
+        fax: fax && fax.trim() !== '' ? fax : null,
         support_rep_id: supportRepId || null
-      }).returning('customer_id');
+      };
+      
+      console.log('🔧 PostgreSQL insert data:', insertData);
+      
+      result = await db(tableName).insert(insertData).returning('customer_id');
     } else if (config.client === 'oracledb') {
       // Oracle
+      console.log('🔧 Getting next Oracle Customer ID...');
       const customerIdResult = await db.raw('SELECT NVL(MAX(CUSTOMERID), 0) + 1 as next_id FROM CUSTOMER');
       const nextId = customerIdResult[0]?.NEXT_ID || 1;
       
-      result = await db('CUSTOMER').insert({
+      console.log(`🔧 Next Oracle Customer ID: ${nextId}`);
+      
+      // For Oracle, handle empty strings properly - use null for optional fields
+      const insertData = {
         CUSTOMERID: nextId,
         FIRSTNAME: firstName,
         LASTNAME: lastName,
-        COMPANY: company || null,
-        ADDRESS: address || null,
-        CITY: city || null,
-        STATE: state || null,
-        COUNTRY: country || null,
-        POSTALCODE: postalCode || null,
-        PHONE: phone || null,
-        FAX: fax || null,
         EMAIL: email,
+        COMPANY: company && company.trim() !== '' ? company : null,
+        ADDRESS: address && address.trim() !== '' ? address : null,
+        CITY: city && city.trim() !== '' ? city : null,
+        STATE: state && state.trim() !== '' ? state : null,
+        COUNTRY: country && country.trim() !== '' ? country : null,
+        POSTALCODE: postalCode && postalCode.trim() !== '' ? postalCode : null,
+        PHONE: phone && phone.trim() !== '' ? phone : null,
+        FAX: fax && fax.trim() !== '' ? fax : null,
         SUPPORTREPID: supportRepId || null
-      });
+      };
+      
+      console.log('🔧 Oracle insert data:', insertData);
+      
+      result = await db('CUSTOMER').insert(insertData);
+      console.log('🔧 Oracle insert result:', result);
     } else {
       // SQL Server and MySQL
-      result = await db(tableName).insert({
+      const insertData = {
         FirstName: firstName,
         LastName: lastName,
-        Company: company || null,
-        Address: address || null,
-        City: city || null,
-        State: state || null,
-        Country: country || null,
-        PostalCode: postalCode || null,
-        Phone: phone || null,
-        Fax: fax || null,
         Email: email,
+        Company: company && company.trim() !== '' ? company : null,
+        Address: address && address.trim() !== '' ? address : null,
+        City: city && city.trim() !== '' ? city : null,
+        State: state && state.trim() !== '' ? state : null,
+        Country: country && country.trim() !== '' ? country : null,
+        PostalCode: postalCode && postalCode.trim() !== '' ? postalCode : null,
+        Phone: phone && phone.trim() !== '' ? phone : null,
+        Fax: fax && fax.trim() !== '' ? fax : null,
         SupportRepId: supportRepId || null
-      });
+      };
+      
+      console.log(`🔧 ${config.client} insert data:`, insertData);
+      
+      result = await db(tableName).insert(insertData);
     }
     
     const timeMs = Date.now() - start;
@@ -2063,6 +2082,35 @@ app.post('/api/customers', async (req, res) => {
   } catch (err) {
     const timeMs = Date.now() - start;
     console.error("❌ Customer creation failed:", err);
+    
+    // Provide more specific error information for different databases
+    if (config.client === 'oracledb' && err.errorNum) {
+      console.error("❌ Oracle Error Details:", {
+        errorNum: err.errorNum,
+        message: err.message,
+        code: err.code,
+        offset: err.offset
+      });
+      
+      if (err.errorNum === 1400) {
+        console.error("❌ ORA-01400: NOT NULL constraint violation - a required field is missing a value");
+      }
+    } else if (config.client === 'mssql' && err.number) {
+      console.error("❌ SQL Server Error Details:", {
+        number: err.number,
+        message: err.message,
+        state: err.state,
+        class: err.class,
+        serverName: err.serverName,
+        procName: err.procName,
+        lineNumber: err.lineNumber
+      });
+      
+      if (err.number === 515) {
+        console.error("❌ SQL Server Error 515: Cannot insert NULL into a column that doesn't allow nulls");
+      }
+    }
+    
     logToFile(`❌ Customer creation failed after ${timeMs}ms: ${err.message}`);
     res.status(500).json({ success: false, error: err.message, timeMs });
   }
