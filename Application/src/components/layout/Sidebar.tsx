@@ -40,8 +40,8 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
   const mainNavigation = [
     { name: 'Dashboard', href: '/', icon: Home },
     { name: 'Customers', href: '/customers', icon: Users },
-    { name: 'Albums', href: '/albums', icon: Disc3 },
     { name: 'Artists', href: '/artists', icon: Mic },
+    { name: 'Albums', href: '/albums', icon: Disc3 },
     { name: 'Tracks', href: '/tracks', icon: Music },
     { name: 'Invoices', href: '/invoices', icon: Receipt, adminOnly: true },
     { name: 'Offers', href: '/offers', icon: Package, adminOnly: true },

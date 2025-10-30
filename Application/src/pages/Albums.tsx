@@ -552,7 +552,7 @@ const Albums: React.FC = () => {
                               </div>
                             </td>
                             <td className="px-4 py-2 text-sm text-gray-600">
-                              ${(track.UnitPrice || track.unitprice || track.UNITPRICE || 0).toFixed(2)}
+                              ${Number(track.UnitPrice || track.unitprice || track.UNITPRICE || 0).toFixed(2)}
                             </td>
                           </tr>
                         ))}
