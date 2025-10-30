@@ -2908,19 +2908,24 @@ app.get('/api/customers/:id', async (req, res) => {
 
 // Create invoice
 app.post('/api/invoice', async (req, res) => {
-  const db = getDb(req.body.connection);
+  const conn = req.body.conn || req.query.conn || defaultConnection;
+  const db = getDb(conn);
   const currentConnections = getConnections();
-  const config = currentConnections[req.body.connection] || currentConnections[defaultConnection];
+  const config = currentConnections[conn] || currentConnections[defaultConnection];
   const dbType = config.client;
   const start = Date.now();
   try {
-    console.log(`➡️ Creating invoice via connection: ${req.body.connection}`);
+    console.log(`➡️ Creating invoice via connection: ${conn}`);
     
-    const tableName = getTableName('Invoice', req.body.connection);
+    const invoiceTableName = getTableName('Invoice', conn);
+    const invoiceLineTableName = getTableName('InvoiceLine', conn);
     const invoiceData = { ...req.body };
-    const tracksData = invoiceData.Tracks || []; // Extract tracks data
+    const lineItems = invoiceData.LineItems || []; // Extract line items data
+    
+    // Clean up the invoice data - remove non-invoice fields
+    delete invoiceData.conn;
     delete invoiceData.connection;
-    delete invoiceData.Tracks; // Remove tracks from invoice data
+    delete invoiceData.LineItems;
     
     // Map column names for database compatibility
     let mappedInvoiceData = {};
@@ -2954,7 +2959,7 @@ app.post('/api/invoice', async (req, res) => {
     }
     
     // Insert the invoice and get the result
-    const result = await db(tableName).insert(mappedInvoiceData);
+    const result = await db(invoiceTableName).insert(mappedInvoiceData);
     
     // Try to get the new invoice ID
     let newInvoiceId = null;
@@ -2967,10 +2972,10 @@ app.post('/api/invoice', async (req, res) => {
     // If we couldn't get the ID from insert, try to find the most recent invoice for this customer
     if (!newInvoiceId && invoiceData.CustomerId) {
       try {
-        const customerIdCol = getColName('CustomerId', req.body.connection);
-        const invoiceIdCol = getColName('InvoiceId', req.body.connection);
+        const customerIdCol = getColName('CustomerId', conn);
+        const invoiceIdCol = getColName('InvoiceId', conn);
         
-        const recentInvoice = await db(tableName)
+        const recentInvoice = await db(invoiceTableName)
           .where(customerIdCol, invoiceData.CustomerId)
           .orderBy(invoiceIdCol, 'desc')
           .first();
@@ -2989,40 +2994,38 @@ app.post('/api/invoice', async (req, res) => {
       }
     }
     
-    // Create invoice line items if we have tracks and an invoice ID
-    if (newInvoiceId && tracksData && tracksData.length > 0) {
+    // Create invoice line items if we have line items and an invoice ID
+    if (newInvoiceId && lineItems && lineItems.length > 0) {
       try {
-        console.log(`➡️ Creating ${tracksData.length} invoice line items for invoice ${newInvoiceId}`);
-        
-        const invoiceLineTable = getTableName('InvoiceLine', req.body.connection);
+        console.log(`➡️ Creating ${lineItems.length} invoice line items for invoice ${newInvoiceId}`);
         
         // Create line items for each track
-        const lineItems = tracksData.map(track => {
+        const lineItemsData = lineItems.map(item => {
           let lineItemData = {};
           
           if (dbType === 'pg') {
             // PostgreSQL uses snake_case
             lineItemData = {
               invoice_id: newInvoiceId,
-              track_id: track.TrackId,
-              unit_price: track.UnitPrice,
-              quantity: track.Quantity
+              track_id: item.TrackId,
+              unit_price: item.UnitPrice,
+              quantity: item.Quantity
             };
           } else if (dbType === 'oracledb') {
             // Oracle uses UPPERCASE
             lineItemData = {
               INVOICEID: newInvoiceId,
-              TRACKID: track.TrackId,
-              UNITPRICE: track.UnitPrice,
-              QUANTITY: track.Quantity
+              TRACKID: item.TrackId,
+              UNITPRICE: item.UnitPrice,
+              QUANTITY: item.Quantity
             };
           } else {
             // SQL Server and MySQL use PascalCase
             lineItemData = {
               InvoiceId: newInvoiceId,
-              TrackId: track.TrackId,
-              UnitPrice: track.UnitPrice,
-              Quantity: track.Quantity
+              TrackId: item.TrackId,
+              UnitPrice: item.UnitPrice,
+              Quantity: item.Quantity
             };
           }
           
@@ -3030,8 +3033,8 @@ app.post('/api/invoice', async (req, res) => {
         });
         
         // Insert all line items
-        await db(invoiceLineTable).insert(lineItems);
-        console.log(`✅ Created ${lineItems.length} invoice line items successfully`);
+        await db(invoiceLineTableName).insert(lineItemsData);
+        console.log(`✅ Created ${lineItemsData.length} invoice line items successfully`);
         
       } catch (lineItemError) {
         console.error('❌ Failed to create invoice line items:', lineItemError);
@@ -3045,7 +3048,7 @@ app.post('/api/invoice', async (req, res) => {
     res.json({ 
       success: true,
       data: result,
-      invoiceId: newInvoiceId,
+      InvoiceId: newInvoiceId,
       timeMs 
     });
     
