@@ -106,7 +106,7 @@ const CustomerModal: React.FC<CustomerModalProps> = ({
         // For add mode, send all data
         await onSave(formData);
       }
-      onClose();
+      // Don't call onClose() here - let the parent handle it after refresh
     } catch (error) {
       console.error('Error saving customer:', error);
     } finally {
@@ -577,8 +577,11 @@ const Customers: React.FC = () => {
         throw new Error(result.error || 'Failed to save customer');
       }
 
-      // Refresh the customer list
+      // Refresh the customer list and wait for it to complete
       await fetchCustomers();
+      
+      // Close the modal after successful save and refresh
+      setModalState({ isOpen: false, mode: 'view' });
       
       // Show success message (you might want to add a toast notification system)
       alert(`Customer ${isUpdate ? 'updated' : 'added'} successfully!`);
