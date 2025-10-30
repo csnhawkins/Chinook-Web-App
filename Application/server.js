@@ -84,7 +84,19 @@ function logWithTimestamp(...args) {
 }
 function errorWithTimestamp(...args) {
   const now = new Date().toISOString();
-  const msg = args.map(a => (typeof a === "string" ? a : JSON.stringify(a))).join(" ");
+  const msg = args.map(a => {
+    if (typeof a === "string") {
+      return a;
+    } else if (a instanceof Error) {
+      return `${a.name}: ${a.message}`;
+    } else {
+      try {
+        return JSON.stringify(a);
+      } catch (circularErr) {
+        return String(a);
+      }
+    }
+  }).join(" ");
   origError(`[${now}] ERROR: ${msg}`);
   logToFile(`[${now}] ERROR: ${msg}`);
 }
@@ -1748,12 +1760,39 @@ app.get('/api/table/:table', async (req, res) => {
       return normalizedRow;
     });
   } else if (config.client === 'oracledb') {
-    // Oracle returns UPPERCASE column names, convert to PascalCase
+    // Oracle returns UPPERCASE column names, convert to PascalCase with proper mapping
     normalizedRows = rows.map(row => {
       const normalizedRow = {};
       Object.keys(row).forEach(key => {
-        // Convert UPPERCASE to PascalCase for common columns
-        const pascalKey = key.charAt(0).toUpperCase() + key.slice(1).toLowerCase();
+        // Use proper column mapping for Oracle
+        let pascalKey;
+        const oracleColumnMap = {
+          'TRACKID': 'TrackId',
+          'NAME': 'Name', 
+          'ALBUMID': 'AlbumId',
+          'MEDIATYPEID': 'MediaTypeId',
+          'GENREID': 'GenreId',
+          'COMPOSER': 'Composer',
+          'MILLISECONDS': 'Milliseconds',
+          'BYTES': 'Bytes',
+          'UNITPRICE': 'UnitPrice',
+          'ARTISTID': 'ArtistId',
+          'TITLE': 'Title',
+          'CUSTOMERID': 'CustomerId',
+          'FIRSTNAME': 'FirstName',
+          'LASTNAME': 'LastName',
+          'EMAIL': 'Email',
+          'INVOICEID': 'InvoiceId',
+          'INVOICEDATE': 'InvoiceDate',
+          'BILLINGADDRESS': 'BillingAddress',
+          'BILLINGCITY': 'BillingCity',
+          'BILLINGSTATE': 'BillingState',
+          'BILLINGCOUNTRY': 'BillingCountry',
+          'BILLINGPOSTALCODE': 'BillingPostalCode',
+          'TOTAL': 'Total'
+        };
+        
+        pascalKey = oracleColumnMap[key] || (key.charAt(0).toUpperCase() + key.slice(1).toLowerCase());
         normalizedRow[pascalKey] = row[key];
       });
       return normalizedRow;
@@ -1870,6 +1909,8 @@ app.get('/api/tracks', async (req, res) => {
   const currentConnections = getConnections();
   const config = currentConnections[conn] || currentConnections[defaultConnection];
   const dbType = config.client;
+  
+  console.log(`🎵 Tracks API called: conn=${conn}, albumId=${albumId}, search="${search}", limit=${limit}`);
   
   try {
     // Get table names for this database type

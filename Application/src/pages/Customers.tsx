@@ -39,27 +39,18 @@ const CustomerModal: React.FC<CustomerModalProps> = ({
   onModeChange,
   adminMode 
 }) => {
-  const [formData, setFormData] = useState<Partial<Customer>>({
-    FirstName: '',
-    LastName: '',
-    Email: '',
-    Company: '',
-    Phone: '',
-    Address: '',
-    City: '',
-    State: '',
-    Country: '',
-    PostalCode: '',
-    Fax: ''
-  });
+  const [formData, setFormData] = useState<Partial<Customer>>({});
+  const [originalData, setOriginalData] = useState<Partial<Customer>>({});
   const [isLoading, setIsLoading] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   useEffect(() => {
     if (customer) {
       setFormData(customer);
+      setOriginalData(customer);
     } else {
-      setFormData({
+      // For new customers, set default values
+      const defaultData = {
         FirstName: '',
         LastName: '',
         Email: '',
@@ -71,7 +62,9 @@ const CustomerModal: React.FC<CustomerModalProps> = ({
         Country: '',
         PostalCode: '',
         Fax: ''
-      });
+      };
+      setFormData(defaultData);
+      setOriginalData(defaultData);
     }
   }, [customer]);
 
@@ -81,7 +74,38 @@ const CustomerModal: React.FC<CustomerModalProps> = ({
 
     setIsLoading(true);
     try {
-      await onSave(formData);
+      // For edit mode, only send changed fields (plus required fields)
+      if (mode === 'edit' && customer) {
+        const changedData: Partial<Customer> = {};
+        
+        // Always include the ID for updates
+        changedData.CustomerId = customer.CustomerId;
+        
+        // Compare each field and only include changed ones
+        Object.keys(formData).forEach(key => {
+          const formValue = formData[key as keyof Customer];
+          const originalValue = originalData[key as keyof Customer];
+          
+          // Convert empty strings back to undefined for optional fields
+          const normalizedFormValue = formValue === '' ? undefined : formValue;
+          const normalizedOriginalValue = originalValue === '' ? undefined : originalValue;
+          
+          if (normalizedFormValue !== normalizedOriginalValue) {
+            changedData[key as keyof Customer] = normalizedFormValue as any;
+          }
+        });
+        
+        // Always include required fields even if unchanged
+        changedData.FirstName = formData.FirstName;
+        changedData.LastName = formData.LastName;
+        changedData.Email = formData.Email;
+        
+        console.log('Sending customer update data:', changedData);
+        await onSave(changedData);
+      } else {
+        // For add mode, send all data
+        await onSave(formData);
+      }
       onClose();
     } catch (error) {
       console.error('Error saving customer:', error);
@@ -312,7 +336,7 @@ const CustomerModal: React.FC<CustomerModalProps> = ({
                     <input
                       type="text"
                       value={formData.Company || ''}
-                      onChange={(e) => setFormData({ ...formData, Company: e.target.value })}
+                      onChange={(e) => setFormData({ ...formData, Company: e.target.value || undefined })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
@@ -323,7 +347,7 @@ const CustomerModal: React.FC<CustomerModalProps> = ({
                     <input
                       type="tel"
                       value={formData.Phone || ''}
-                      onChange={(e) => setFormData({ ...formData, Phone: e.target.value })}
+                      onChange={(e) => setFormData({ ...formData, Phone: e.target.value || undefined })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
@@ -333,7 +357,7 @@ const CustomerModal: React.FC<CustomerModalProps> = ({
                     </label>
                     <textarea
                       value={formData.Address || ''}
-                      onChange={(e) => setFormData({ ...formData, Address: e.target.value })}
+                      onChange={(e) => setFormData({ ...formData, Address: e.target.value || undefined })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                       rows={2}
                     />
@@ -345,7 +369,7 @@ const CustomerModal: React.FC<CustomerModalProps> = ({
                     <input
                       type="text"
                       value={formData.City || ''}
-                      onChange={(e) => setFormData({ ...formData, City: e.target.value })}
+                      onChange={(e) => setFormData({ ...formData, City: e.target.value || undefined })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
@@ -356,7 +380,7 @@ const CustomerModal: React.FC<CustomerModalProps> = ({
                     <input
                       type="text"
                       value={formData.State || ''}
-                      onChange={(e) => setFormData({ ...formData, State: e.target.value })}
+                      onChange={(e) => setFormData({ ...formData, State: e.target.value || undefined })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
@@ -367,7 +391,7 @@ const CustomerModal: React.FC<CustomerModalProps> = ({
                     <input
                       type="text"
                       value={formData.Country || ''}
-                      onChange={(e) => setFormData({ ...formData, Country: e.target.value })}
+                      onChange={(e) => setFormData({ ...formData, Country: e.target.value || undefined })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
@@ -378,7 +402,18 @@ const CustomerModal: React.FC<CustomerModalProps> = ({
                     <input
                       type="text"
                       value={formData.PostalCode || ''}
-                      onChange={(e) => setFormData({ ...formData, PostalCode: e.target.value })}
+                      onChange={(e) => setFormData({ ...formData, PostalCode: e.target.value || undefined })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Fax
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.Fax || ''}
+                      onChange={(e) => setFormData({ ...formData, Fax: e.target.value || undefined })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>

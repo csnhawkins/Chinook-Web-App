@@ -298,7 +298,16 @@ const Dashboard: React.FC = () => {
             </button>
             <button 
               onClick={() => handleQuickAction('albums')}
-              className="bg-purple-600 text-white px-4 py-2 rounded-md hover:bg-purple-700 transition-colors w-full font-medium"
+              className="btn-primary btn-md w-full"
+              style={{ backgroundColor: '#7c3aed', borderColor: '#7c3aed' }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = '#6d28d9';
+                e.currentTarget.style.borderColor = '#6d28d9';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = '#7c3aed';
+                e.currentTarget.style.borderColor = '#7c3aed';
+              }}
             >
               Browse Albums
             </button>
