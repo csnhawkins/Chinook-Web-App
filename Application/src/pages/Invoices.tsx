@@ -218,7 +218,7 @@ const Invoices: React.FC = () => {
           const tracksData = data.tracks.map((track: any) => ({
             TrackId: track.TrackId || track.trackid || track.TRACKID || track.track_id,
             Name: track.Name || track.name || track.NAME || track.track_name || '',
-            UnitPrice: track.UnitPrice || track.unitprice || track.UNITPRICE || track.unit_price || 0,
+            UnitPrice: parseFloat(track.UnitPrice || track.unitprice || track.UNITPRICE || track.unit_price || 0),
             ArtistName: track.ArtistName || track.artistname || track.ARTISTNAME || track.artist_name || 'Unknown Artist',
             AlbumTitle: track.AlbumTitle || track.albumtitle || track.ALBUMTITLE || track.album_title || 'Unknown Album'
           }));
@@ -258,7 +258,7 @@ const Invoices: React.FC = () => {
           const tracksData = data.tracks.map((track: any) => ({
             TrackId: track.TrackId || track.trackid || track.TRACKID || track.track_id,
             Name: track.Name || track.name || track.NAME || track.track_name || '',
-            UnitPrice: track.UnitPrice || track.unitprice || track.UNITPRICE || track.unit_price || 0,
+            UnitPrice: parseFloat(track.UnitPrice || track.unitprice || track.UNITPRICE || track.unit_price || 0),
             ArtistName: track.ArtistName || track.artistname || track.ARTISTNAME || track.artist_name || 'Unknown Artist',
             AlbumTitle: track.AlbumTitle || track.albumtitle || track.ALBUMTITLE || track.album_title || 'Unknown Album'
           }));
@@ -950,7 +950,7 @@ const Invoices: React.FC = () => {
                               </p>
                             </div>
                             <span className="font-medium text-green-600">
-                              ${track.UnitPrice.toFixed(2)}
+                              ${(typeof track.UnitPrice === 'number' ? track.UnitPrice : parseFloat(track.UnitPrice || 0)).toFixed(2)}
                             </span>
                           </div>
                         </div>
@@ -972,7 +972,7 @@ const Invoices: React.FC = () => {
                         >
                           <p className="font-medium text-gray-900 text-sm truncate">{track.Name}</p>
                           <p className="text-xs text-gray-600 truncate">by {track.ArtistName}</p>
-                          <p className="text-sm font-medium text-green-600">${track.UnitPrice.toFixed(2)}</p>
+                          <p className="text-sm font-medium text-green-600">${(typeof track.UnitPrice === 'number' ? track.UnitPrice : parseFloat(track.UnitPrice || 0)).toFixed(2)}</p>
                         </button>
                       ))}
                     </div>
@@ -992,7 +992,7 @@ const Invoices: React.FC = () => {
                           <p className="text-sm text-gray-600">
                             by {item.ArtistName} • {item.AlbumTitle}
                           </p>
-                          <p className="text-sm text-gray-500">${item.UnitPrice.toFixed(2)} each</p>
+                          <p className="text-sm text-gray-500">${(typeof item.UnitPrice === 'number' ? item.UnitPrice : parseFloat(item.UnitPrice || 0)).toFixed(2)} each</p>
                         </div>
                         <div className="flex items-center gap-3">
                           <div className="flex items-center gap-2">
