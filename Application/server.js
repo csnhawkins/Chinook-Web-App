@@ -3645,7 +3645,7 @@ app.get('/api/offers', async (req, res) => {
             .orWhere('table_name', name.toUpperCase())
             .first();
           if (exists) {
-            tableName = name;
+            tableName = exists.table_name; // Use the actual table name from the database
             tableExists = true;
             break;
           }
@@ -3655,7 +3655,7 @@ app.get('/api/offers', async (req, res) => {
             .where('table_name', name)
             .first();
           if (exists) {
-            tableName = name;
+            tableName = exists.TABLE_NAME; // Use the actual table name from the database
             tableExists = true;
             break;
           }
@@ -3665,17 +3665,17 @@ app.get('/api/offers', async (req, res) => {
             .where('table_name', name.toUpperCase())
             .first();
           if (exists) {
-            tableName = name.toUpperCase();
+            tableName = exists.TABLE_NAME; // Use the actual table name from the database
             tableExists = true;
             break;
           }
         } else {
-          // For SQL Server, check sys.tables
+          // For SQL Server, check information_schema.tables
           const exists = await db('information_schema.tables')
             .where('table_name', name)
             .first();
           if (exists) {
-            tableName = name;
+            tableName = exists.table_name; // Use the actual table name from the database
             tableExists = true;
             break;
           }
