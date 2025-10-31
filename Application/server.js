@@ -3919,11 +3919,31 @@ app.get('/api/offers', async (req, res) => {
 
   } catch (err) {
     console.error('❌ Error querying offers table:', err);
-    res.status(500).json({
-      success: false,
-      error: err.message,
-      tableExists: false
-    });
+    // Check if this is a "table doesn't exist" error (normal case)
+    const errorMsg = err.message.toLowerCase();
+    const isTableNotFound = errorMsg.includes("doesn't exist") || 
+                           errorMsg.includes("does not exist") || 
+                           errorMsg.includes("table or view does not exist") ||
+                           errorMsg.includes("invalid object name") ||
+                           errorMsg.includes("relation") && errorMsg.includes("does not exist");
+    
+    if (isTableNotFound) {
+      // Table doesn't exist - this is expected, return success with tableExists: false
+      console.log('📋 Offers table not found - will show creation instructions');
+      res.json({
+        success: true,
+        tableExists: false,
+        tableName: null,
+        message: 'Offers table not found'
+      });
+    } else {
+      // Actual error (connection issues, etc.)
+      res.status(500).json({
+        success: false,
+        error: err.message,
+        tableExists: false
+      });
+    }
   }
 });
 
