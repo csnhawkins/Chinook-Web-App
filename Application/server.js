@@ -3748,7 +3748,7 @@ app.get('/api/offers', async (req, res) => {
       }
     }
 
-    // Fallback: if direct query failed, try information_schema approach
+    // Fallback: if direct query failed, try information_schema approach (but not for MySQL)
     if (!tableExists) {
       for (const name of possibleNames) {
         try {
@@ -3763,16 +3763,6 @@ app.get('/api/offers', async (req, res) => {
               tableExists = true;
               break;
             }
-          } else if (dbType === 'mysql' || dbType === 'mysql2') {
-            // For MySQL, check information_schema but use original name for querying
-            const exists = await db('information_schema.tables')
-              .where('table_name', name)
-              .first();
-            if (exists) {
-              tableName = name; // Use the search name that worked
-              tableExists = true;
-              break;
-            }
           } else if (dbType === 'oracledb') {
             // For Oracle, check user_tables
             const exists = await db('user_tables')
@@ -3783,8 +3773,8 @@ app.get('/api/offers', async (req, res) => {
               tableExists = true;
               break;
             }
-          } else {
-            // For SQL Server, check information_schema but use original name
+          } else if (dbType !== 'mysql' && dbType !== 'mysql2') {
+            // For SQL Server and other databases (but NOT MySQL), check information_schema
             const exists = await db('information_schema.tables')
               .where('table_name', name)
               .first();
@@ -3794,6 +3784,8 @@ app.get('/api/offers', async (req, res) => {
               break;
             }
           }
+          // Note: MySQL is intentionally excluded from information_schema fallback
+          // because DESCRIBE test is more reliable and information_schema can be stale
         } catch (err) {
           // Try next name
           continue;
