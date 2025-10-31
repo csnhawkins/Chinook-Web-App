@@ -168,15 +168,47 @@ INSERT INTO Offers (OfferName, Description, DiscountPercent, StartDate, EndDate,
     }
   };
 
+  const [showScriptModal, setShowScriptModal] = useState(false);
+
   const copyToClipboard = async () => {
-    try {
-      await navigator.clipboard.writeText(getCreateScript());
-      // You could add a toast notification here
-      alert('Create script copied to clipboard!');
-    } catch (err) {
-      console.error('Failed to copy to clipboard:', err);
-      alert('Failed to copy to clipboard. Please copy manually.');
+    const script = getCreateScript();
+    
+    // Try modern clipboard API first
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      try {
+        await navigator.clipboard.writeText(script);
+        alert('✅ Create script copied to clipboard successfully!');
+        return;
+      } catch (err) {
+        console.warn('Modern clipboard API failed:', err);
+      }
     }
+    
+    // Fallback to legacy method
+    try {
+      const textArea = document.createElement('textarea');
+      textArea.value = script;
+      textArea.style.position = 'fixed';
+      textArea.style.left = '-9999px';
+      textArea.style.top = '-9999px';
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      
+      const successful = document.execCommand('copy');
+      document.body.removeChild(textArea);
+      
+      if (successful) {
+        alert('✅ Create script copied to clipboard successfully!');
+        return;
+      }
+    } catch (err) {
+      console.warn('Legacy clipboard method failed:', err);
+    }
+    
+    // If all clipboard methods fail, show modal with script
+    console.log('All clipboard methods failed, showing modal for manual copy');
+    setShowScriptModal(true);
   };
 
   return (
@@ -238,6 +270,16 @@ INSERT INTO Offers (OfferName, Description, DiscountPercent, StartDate, EndDate,
                   Copy Table Creation Script
                 </button>
                 <button
+                  onClick={() => setShowScriptModal(true)}
+                  className="inline-flex items-center px-4 py-2 border border-blue-300 text-sm font-medium rounded-md text-blue-700 bg-white hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                  <svg className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                  </svg>
+                  View Script
+                </button>
+                <button
                   onClick={fetchOffers}
                   className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                 >
@@ -294,6 +336,70 @@ INSERT INTO Offers (OfferName, Description, DiscountPercent, StartDate, EndDate,
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Script Modal for manual copy */}
+      {showScriptModal && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-11/12 max-w-4xl shadow-lg rounded-md bg-white">
+            <div className="mt-3">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-medium text-gray-900">
+                  {activeConnection?.client === 'mysql' || activeConnection?.client === 'mysql2' ? 'MySQL' :
+                   activeConnection?.client === 'oracledb' ? 'Oracle' :
+                   activeConnection?.client === 'mssql' ? 'SQL Server' : 'PostgreSQL'} Create Script
+                </h3>
+                <button
+                  onClick={() => setShowScriptModal(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              
+              <p className="text-sm text-gray-600 mb-4">
+                Copy this script and run it in your database to create the Offers table:
+              </p>
+              
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-4">
+                <pre className="text-sm text-gray-800 whitespace-pre-wrap overflow-x-auto max-h-96">
+                  {getCreateScript()}
+                </pre>
+              </div>
+              
+              <div className="flex justify-end space-x-3">
+                <button
+                  onClick={() => {
+                    // Try to copy again from the modal
+                    const script = getCreateScript();
+                    const textArea = document.createElement('textarea');
+                    textArea.value = script;
+                    document.body.appendChild(textArea);
+                    textArea.select();
+                    try {
+                      document.execCommand('copy');
+                      alert('Script copied to clipboard!');
+                    } catch {
+                      alert('Please manually select and copy the text above');
+                    }
+                    document.body.removeChild(textArea);
+                  }}
+                  className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                  Try Copy Again
+                </button>
+                <button
+                  onClick={() => setShowScriptModal(false)}
+                  className="px-4 py-2 bg-gray-300 text-gray-700 text-sm font-medium rounded-md hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>
