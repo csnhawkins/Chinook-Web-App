@@ -3559,6 +3559,253 @@ app.post('/api/rebuild-frontend', async (req, res) => {
   }
 });
 
+// Dynamic Offers endpoint - Detects table structure and returns data
+app.get('/api/offers', async (req, res) => {
+  const conn = req.query.conn || defaultConnection;
+  const currentConnections = getConnections();
+  const config = currentConnections[conn] || currentConnections[defaultConnection];
+  const dbType = config.client;
+  const db = getDb(conn);
+
+  // Search/filter params
+  const search = req.query.search || '';
+  const searchColumn = req.query.searchColumn || '';
+  const exactMatch = req.query.exactMatch == '1';
+  const limit = parseInt(req.query.limit) || 50;
+  const offset = parseInt(req.query.offset) || 0;
+
+  console.log(`🎁 Offers query: offset=${offset}, limit=${limit}, search="${search}", conn=${conn}`);
+
+  try {
+    // Try to find the offers table (case-insensitive search)
+    let tableName = null;
+    let tableExists = false;
+
+    // List of possible table names to try
+    const possibleNames = [
+      'Offers', 'offers', 'OFFERS',
+      'Offer', 'offer', 'OFFER',
+      'public.offers', 'dbo.Offers'
+    ];
+
+    // Try each possible table name
+    for (const name of possibleNames) {
+      try {
+        if (dbType === 'pg') {
+          // For PostgreSQL, check information_schema
+          const exists = await db('information_schema.tables')
+            .where('table_name', name.toLowerCase())
+            .orWhere('table_name', name.toUpperCase())
+            .first();
+          if (exists) {
+            tableName = name;
+            tableExists = true;
+            break;
+          }
+        } else if (dbType === 'mysql' || dbType === 'mysql2') {
+          // For MySQL, check information_schema
+          const exists = await db('information_schema.tables')
+            .where('table_name', name)
+            .first();
+          if (exists) {
+            tableName = name;
+            tableExists = true;
+            break;
+          }
+        } else if (dbType === 'oracledb') {
+          // For Oracle, check user_tables
+          const exists = await db('user_tables')
+            .where('table_name', name.toUpperCase())
+            .first();
+          if (exists) {
+            tableName = name.toUpperCase();
+            tableExists = true;
+            break;
+          }
+        } else {
+          // For SQL Server, check sys.tables
+          const exists = await db('information_schema.tables')
+            .where('table_name', name)
+            .first();
+          if (exists) {
+            tableName = name;
+            tableExists = true;
+            break;
+          }
+        }
+      } catch (err) {
+        // Try next name
+        continue;
+      }
+    }
+
+    if (!tableExists || !tableName) {
+      return res.status(404).json({
+        success: false,
+        error: 'Offers table not found',
+        message: 'The Offers table does not exist in the current database. Please create it using the provided demo scripts.',
+        tableExists: false
+      });
+    }
+
+    console.log(`✅ Found offers table: ${tableName}`);
+
+    // Get table column information
+    let columns = [];
+    let columnTypes = {};
+
+    try {
+      if (dbType === 'pg') {
+        // PostgreSQL - get column info from information_schema
+        const columnInfo = await db('information_schema.columns')
+          .select('column_name', 'data_type', 'is_nullable', 'column_default')
+          .where('table_name', tableName.toLowerCase())
+          .orderBy('ordinal_position');
+        
+        columns = columnInfo.map(col => ({
+          name: col.column_name,
+          type: col.data_type,
+          nullable: col.is_nullable === 'YES',
+          default: col.column_default
+        }));
+        
+        columnInfo.forEach(col => {
+          columnTypes[col.column_name] = col.data_type;
+        });
+      } else if (dbType === 'mysql' || dbType === 'mysql2') {
+        // MySQL - get column info from information_schema
+        const columnInfo = await db('information_schema.columns')
+          .select('column_name', 'data_type', 'is_nullable', 'column_default')
+          .where('table_name', tableName)
+          .orderBy('ordinal_position');
+        
+        columns = columnInfo.map(col => ({
+          name: col.COLUMN_NAME,
+          type: col.DATA_TYPE,
+          nullable: col.IS_NULLABLE === 'YES',
+          default: col.COLUMN_DEFAULT
+        }));
+        
+        columnInfo.forEach(col => {
+          columnTypes[col.COLUMN_NAME] = col.DATA_TYPE;
+        });
+      } else if (dbType === 'oracledb') {
+        // Oracle - get column info from user_tab_columns
+        const columnInfo = await db('user_tab_columns')
+          .select('COLUMN_NAME', 'DATA_TYPE', 'NULLABLE', 'DATA_DEFAULT')
+          .where('TABLE_NAME', tableName)
+          .orderBy('COLUMN_ID');
+        
+        columns = columnInfo.map(col => ({
+          name: col.COLUMN_NAME,
+          type: col.DATA_TYPE,
+          nullable: col.NULLABLE === 'Y',
+          default: col.DATA_DEFAULT
+        }));
+        
+        columnInfo.forEach(col => {
+          columnTypes[col.COLUMN_NAME] = col.DATA_TYPE;
+        });
+      } else {
+        // SQL Server - get column info from information_schema
+        const columnInfo = await db('information_schema.columns')
+          .select('column_name', 'data_type', 'is_nullable', 'column_default')
+          .where('table_name', tableName)
+          .orderBy('ordinal_position');
+        
+        columns = columnInfo.map(col => ({
+          name: col.column_name,
+          type: col.data_type,
+          nullable: col.is_nullable === 'YES',
+          default: col.column_default
+        }));
+        
+        columnInfo.forEach(col => {
+          columnTypes[col.column_name] = col.data_type;
+        });
+      }
+    } catch (err) {
+      console.warn('Could not get column info, proceeding with basic query:', err.message);
+    }
+
+    // Build the data query
+    let query = db(tableName).select('*');
+    let countQuery = db(tableName).count({total: '*'});
+
+    // Apply search if provided
+    if (search && searchColumn) {
+      const searchTerm = exactMatch ? search : `%${search}%`;
+      query = query.where(searchColumn, exactMatch ? '=' : 'like', searchTerm);
+      countQuery = countQuery.where(searchColumn, exactMatch ? '=' : 'like', searchTerm);
+    } else if (search && columns.length > 0) {
+      // Search across all text columns if no specific column is specified
+      query = query.where(function() {
+        columns.forEach((col, index) => {
+          const searchTerm = exactMatch ? search : `%${search}%`;
+          const operator = exactMatch ? '=' : 'like';
+          
+          if (index === 0) {
+            this.where(col.name, operator, searchTerm);
+          } else {
+            this.orWhere(col.name, operator, searchTerm);
+          }
+        });
+      });
+
+      countQuery = countQuery.where(function() {
+        columns.forEach((col, index) => {
+          const searchTerm = exactMatch ? search : `%${search}%`;
+          const operator = exactMatch ? '=' : 'like';
+          
+          if (index === 0) {
+            this.where(col.name, operator, searchTerm);
+          } else {
+            this.orWhere(col.name, operator, searchTerm);
+          }
+        });
+      });
+    }
+
+    // Get total count
+    const countResult = await countQuery.first();
+    const totalRows = parseInt(countResult?.total) || 0;
+
+    // Get paginated data
+    const rows = await query.limit(limit).offset(offset);
+
+    // If no column info was retrieved, infer from first row
+    if (columns.length === 0 && rows.length > 0) {
+      columns = Object.keys(rows[0]).map(name => ({
+        name: name,
+        type: typeof rows[0][name] === 'number' ? 'numeric' : 'text',
+        nullable: true,
+        default: null
+      }));
+    }
+
+    res.json({
+      success: true,
+      tableExists: true,
+      tableName: tableName,
+      columns: columns,
+      columnTypes: columnTypes,
+      rows: rows,
+      totalRows: totalRows,
+      limit: limit,
+      offset: offset,
+      hasMore: offset + limit < totalRows
+    });
+
+  } catch (err) {
+    console.error('❌ Error querying offers table:', err);
+    res.status(500).json({
+      success: false,
+      error: err.message,
+      tableExists: false
+    });
+  }
+});
+
 // Catch-all handler for React Router (must be after all API routes)
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
