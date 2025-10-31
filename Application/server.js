@@ -307,9 +307,41 @@ function setupFileWatcher() {
 
     gitWatcher.on('change', (filePath) => {
       console.log(`🔄 Git change detected: ${filePath}`);
-      setTimeout(() => {
-        console.log('🌍 Git pull detected - rebuilding frontend...');
-        rebuildFrontend('git pull detected');
+      setTimeout(async () => {
+        console.log('🌍 Git pull detected - checking for backend changes...');
+        
+        // Check if server.js or other backend files changed
+        try {
+          const { execSync } = await import('child_process');
+          const changedFiles = execSync('git diff --name-only HEAD~1 HEAD', { 
+            encoding: 'utf8',
+            cwd: __dirname 
+          }).trim();
+          
+          console.log('📋 Files changed in last commit:', changedFiles);
+          
+          const backendFilesChanged = changedFiles.split('\n').some(file => 
+            file.includes('server.js') || 
+            file.includes('package.json') ||
+            file.includes('ecosystem.config.cjs') ||
+            file.startsWith('Application/') && !file.startsWith('Application/src/') && !file.startsWith('Application/public/')
+          );
+          
+          if (backendFilesChanged) {
+            console.log('🔄 Backend files changed - service restart required!');
+            console.log('⚠️  Please restart the service to apply backend changes');
+            console.log('   Use: pm2 restart chinook-web-app');
+            
+            // Also rebuild frontend in case there are frontend changes too
+            rebuildFrontend('git pull detected (backend changes)');
+          } else {
+            console.log('🎨 Only frontend changes detected - rebuilding frontend...');
+            rebuildFrontend('git pull detected (frontend only)');
+          }
+        } catch (err) {
+          console.log('⚠️ Could not check git diff, rebuilding frontend anyway...');
+          rebuildFrontend('git pull detected');
+        }
       }, 1500); // Longer delay for git operations to complete
     });
 
@@ -3691,12 +3723,19 @@ app.get('/api/offers', async (req, res) => {
       'public.offers', 'dbo.Offers'
     ];
 
-    // Try each possible table name
+    // Try each possible table name with robust detection
     for (const name of possibleNames) {
       try {
-        // Test if we can actually query the table (more reliable than information_schema)
-        // Use count() which will throw an error if table doesn't exist
-        const testQuery = await db(name).count('* as total').first();
+        // Test if we can actually query the table - use a more robust test
+        // For better error detection, try to select from the table structure
+        if (dbType === 'mysql' || dbType === 'mysql2') {
+          // MySQL specific: Try to describe the table which will definitely fail if table doesn't exist
+          await db.raw(`DESCRIBE \`${name}\``);
+        } else {
+          // For other databases, use count test
+          await db(name).count('* as total').first();
+        }
+        
         // If we get here without error, table exists and is queryable
         tableName = name;
         tableExists = true;
