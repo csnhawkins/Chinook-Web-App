@@ -3695,7 +3695,8 @@ app.get('/api/offers', async (req, res) => {
     for (const name of possibleNames) {
       try {
         // Test if we can actually query the table (more reliable than information_schema)
-        const testQuery = await db(name).limit(1).first();
+        // Use count() which will throw an error if table doesn't exist
+        const testQuery = await db(name).count('* as total').first();
         // If we get here without error, table exists and is queryable
         tableName = name;
         tableExists = true;
@@ -3703,6 +3704,7 @@ app.get('/api/offers', async (req, res) => {
         break;
       } catch (err) {
         // Table doesn't exist or can't be queried, try next name
+        console.log(`⚠️ Table '${name}' not found or not queryable: ${err.message}`);
         continue;
       }
     }
