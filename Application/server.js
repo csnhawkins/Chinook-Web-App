@@ -5,6 +5,7 @@ import { fileURLToPath } from "url";
 import cors from "cors";
 import knex from "knex";
 import sql from "mssql";
+import { execSync, spawn } from "child_process";
 
 // Conditionally import chokidar for file watching (graceful degradation)
 let chokidar = null;
@@ -152,9 +153,6 @@ function reloadConnections() {
 
 // Helper function to find npm executable
 function findNpmPath() {
-  const path = require('path');
-  const fs = require('fs');
-  
   // Common npm locations on Windows
   const possiblePaths = [
     'npm',
@@ -170,7 +168,6 @@ function findNpmPath() {
     try {
       if (npmPath === 'npm' || npmPath === 'npm.cmd') {
         // Test if npm is in PATH
-        const { execSync } = require('child_process');
         execSync(`${npmPath} --version`, { stdio: 'ignore' });
         return npmPath;
       } else if (fs.existsSync(npmPath)) {
@@ -201,8 +198,6 @@ async function rebuildFrontend(reason = 'file change') {
   console.log('🏗️ Building React frontend...');
   
   try {
-    const { spawn } = await import('child_process');
-    
     // Find npm executable
     const npmPath = findNpmPath();
     if (!npmPath) {
@@ -3699,51 +3694,69 @@ app.get('/api/offers', async (req, res) => {
     // Try each possible table name
     for (const name of possibleNames) {
       try {
-        if (dbType === 'pg') {
-          // For PostgreSQL, check information_schema
-          const exists = await db('information_schema.tables')
-            .where('table_name', name.toLowerCase())
-            .orWhere('table_name', name.toUpperCase())
-            .first();
-          if (exists) {
-            tableName = exists.table_name; // Use the actual table name from the database
-            tableExists = true;
-            break;
-          }
-        } else if (dbType === 'mysql' || dbType === 'mysql2') {
-          // For MySQL, check information_schema
-          const exists = await db('information_schema.tables')
-            .where('table_name', name)
-            .first();
-          if (exists) {
-            tableName = exists.TABLE_NAME; // Use the actual table name from the database
-            tableExists = true;
-            break;
-          }
-        } else if (dbType === 'oracledb') {
-          // For Oracle, check user_tables
-          const exists = await db('user_tables')
-            .where('table_name', name.toUpperCase())
-            .first();
-          if (exists) {
-            tableName = exists.TABLE_NAME; // Use the actual table name from the database
-            tableExists = true;
-            break;
-          }
-        } else {
-          // For SQL Server, check information_schema.tables
-          const exists = await db('information_schema.tables')
-            .where('table_name', name)
-            .first();
-          if (exists) {
-            tableName = exists.table_name; // Use the actual table name from the database
-            tableExists = true;
-            break;
-          }
-        }
+        // Test if we can actually query the table (more reliable than information_schema)
+        const testQuery = await db(name).limit(1).first();
+        // If we get here without error, table exists and is queryable
+        tableName = name;
+        tableExists = true;
+        console.log(`✅ Found queryable offers table: ${tableName}`);
+        break;
       } catch (err) {
-        // Try next name
+        // Table doesn't exist or can't be queried, try next name
         continue;
+      }
+    }
+
+    // Fallback: if direct query failed, try information_schema approach
+    if (!tableExists) {
+      for (const name of possibleNames) {
+        try {
+          if (dbType === 'pg') {
+            // For PostgreSQL, check information_schema
+            const exists = await db('information_schema.tables')
+              .where('table_name', name.toLowerCase())
+              .orWhere('table_name', name.toUpperCase())
+              .first();
+            if (exists) {
+              tableName = exists.table_name; // Use the actual table name from DB (for case sensitivity)
+              tableExists = true;
+              break;
+            }
+          } else if (dbType === 'mysql' || dbType === 'mysql2') {
+            // For MySQL, check information_schema but use original name for querying
+            const exists = await db('information_schema.tables')
+              .where('table_name', name)
+              .first();
+            if (exists) {
+              tableName = name; // Use the search name that worked
+              tableExists = true;
+              break;
+            }
+          } else if (dbType === 'oracledb') {
+            // For Oracle, check user_tables
+            const exists = await db('user_tables')
+              .where('table_name', name.toUpperCase())
+              .first();
+            if (exists) {
+              tableName = name.toUpperCase(); // Use uppercase for Oracle
+              tableExists = true;
+              break;
+            }
+          } else {
+            // For SQL Server, check information_schema but use original name
+            const exists = await db('information_schema.tables')
+              .where('table_name', name)
+              .first();
+            if (exists) {
+              tableName = name; // Use the search name that worked
+              tableExists = true;
+              break;
+            }
+          }
+        } catch (err) {
+          // Try next name
+          continue;
+        }
       }
     }
 
