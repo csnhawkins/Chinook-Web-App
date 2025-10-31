@@ -9,6 +9,7 @@ import sql from "mssql";
 // Conditionally import chokidar for file watching (graceful degradation)
 let chokidar = null;
 let fileWatchingEnabled = false;
+let autoRebuildEnabled = true; // Will be disabled if npm is not found
 
 try {
   chokidar = await import("chokidar");
@@ -149,10 +150,49 @@ function reloadConnections() {
   }
 }
 
+// Helper function to find npm executable
+function findNpmPath() {
+  const path = require('path');
+  const fs = require('fs');
+  
+  // Common npm locations on Windows
+  const possiblePaths = [
+    'npm',
+    'npm.cmd',
+    path.join(process.env.APPDATA || '', 'npm', 'npm.cmd'),
+    path.join(process.env.ProgramFiles || '', 'nodejs', 'npm.cmd'),
+    path.join(process.env['ProgramFiles(x86)'] || '', 'nodejs', 'npm.cmd'),
+    'C:\\Program Files\\nodejs\\npm.cmd',
+    'C:\\Program Files (x86)\\nodejs\\npm.cmd'
+  ];
+  
+  for (const npmPath of possiblePaths) {
+    try {
+      if (npmPath === 'npm' || npmPath === 'npm.cmd') {
+        // Test if npm is in PATH
+        const { execSync } = require('child_process');
+        execSync(`${npmPath} --version`, { stdio: 'ignore' });
+        return npmPath;
+      } else if (fs.existsSync(npmPath)) {
+        return npmPath;
+      }
+    } catch (err) {
+      // Continue to next path
+    }
+  }
+  
+  return null;
+}
+
 // Auto-rebuild frontend when source files change
 async function rebuildFrontend(reason = 'file change') {
   if (rebuilding) {
     console.log('🔄 Frontend rebuild already in progress, skipping...');
+    return;
+  }
+  
+  if (!autoRebuildEnabled) {
+    console.log('⚠️ Auto-rebuild disabled (npm not available) - skipping rebuild');
     return;
   }
   
@@ -163,9 +203,23 @@ async function rebuildFrontend(reason = 'file change') {
   try {
     const { spawn } = await import('child_process');
     
-    const buildProcess = spawn('npm', ['run', 'build'], {
+    // Find npm executable
+    const npmPath = findNpmPath();
+    if (!npmPath) {
+      console.error('❌ npm not found in PATH or common installation locations');
+      console.error('   Disabling auto-rebuild to prevent further errors');
+      console.error('   To re-enable, restart the service after installing Node.js/npm');
+      autoRebuildEnabled = false;
+      rebuilding = false;
+      return;
+    }
+    
+    console.log(`📦 Using npm at: ${npmPath}`);
+    
+    const buildProcess = spawn(npmPath, ['run', 'build'], {
       cwd: __dirname,
-      stdio: 'pipe'
+      stdio: 'pipe',
+      shell: true // Important for Windows .cmd files
     });
     
     let buildOutput = '';
@@ -192,11 +246,18 @@ async function rebuildFrontend(reason = 'file change') {
     
     buildProcess.on('error', (err) => {
       console.error('❌ Failed to start frontend build:', err.message);
+      if (err.code === 'ENOENT') {
+        console.error('   npm command not found - disabling auto-rebuild');
+        autoRebuildEnabled = false;
+      }
       rebuilding = false;
     });
     
   } catch (err) {
     console.error('❌ Frontend rebuild error:', err.message);
+    if (err.message.includes('npm not found')) {
+      autoRebuildEnabled = false;
+    }
     rebuilding = false;
   }
 }
@@ -3877,12 +3938,22 @@ process.on('SIGINT', () => {
 
 app.listen(3001, () => {
   console.log("🚀 Backend running on http://localhost:3001");
-  console.log("🔧 Auto-rebuild enabled for frontend changes");
+  
+  if (autoRebuildEnabled) {
+    console.log("🔧 Auto-rebuild enabled for frontend changes");
+  } else {
+    console.log("⚠️ Auto-rebuild disabled (npm not available)");
+  }
+  
   console.log("🌍 Git pull detection active");
   
   // Always rebuild frontend on service startup to ensure latest code is served
   setTimeout(() => {
-    console.log("🔄 Service startup: Rebuilding frontend to ensure latest code...");
-    rebuildFrontend('service startup');
+    if (autoRebuildEnabled) {
+      console.log("🔄 Service startup: Rebuilding frontend to ensure latest code...");
+      rebuildFrontend('service startup');
+    } else {
+      console.log("⚠️ Skipping startup rebuild - npm not available");
+    }
   }, 2000); // Wait 2 seconds for service to fully initialize
 });
