@@ -121,6 +121,8 @@ Write-Host "====================================================" -ForegroundCol
 if ($backendExists -and $frontendExists) {
     Write-Host ""
     Write-Host "Application should be available at: http://localhost:3001" -ForegroundColor Yellow
+    Write-Host "🔄 The service will automatically rebuild the frontend on startup" -ForegroundColor Cyan
+    Write-Host "📱 Wait a moment, then refresh your browser to see the latest changes" -ForegroundColor Cyan
     Write-Host ""
     Write-Host "If services are not responding:" -ForegroundColor White
     Write-Host "  • Check Windows Event Viewer for errors" -ForegroundColor White

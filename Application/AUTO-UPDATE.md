@@ -1,33 +1,88 @@
-# 🔄 Auto-Update Features
+# 🔄 Automatic Git Pull Detection
 
-The Chinook WebApp now includes comprehensive auto-update functionality, perfect for demo VMs and development environments where you need changes to appear instantly without manual intervention.
+The Chinook WebApp service now includes **fully automatic git pull detection** and frontend rebuilding. No manual intervention required!
 
-## 🚀 Features Included
+## 🚀 How It Works
 
-### 1. **Real-time File Watching**
-- Automatically detects changes to frontend source files (`src/`, `public/`, etc.)
-- Monitors `connections.js` for database configuration updates
-- Watches git changes to detect `git pull` operations
-- Triggers automatic frontend rebuilds when changes are detected
+### **Automatic Startup Rebuild**
+- Service always rebuilds frontend on startup to ensure latest code is served
+- Happens automatically 2 seconds after service starts
 
-### 2. **Git Pull Detection**
+### **Real-time Git Pull Detection**  
+- Monitors multiple git files: `.git/refs/heads/**`, `.git/HEAD`, `.git/index`, `.git/FETCH_HEAD`
 - Automatically detects when `git pull` brings in new changes
 - Triggers frontend rebuild without requiring service restart
-- Perfect for demo scenarios where you pull updates from GitHub
+- Enhanced file watching with error recovery
 
-### 3. **Manual Update Tools**
+### **Backup Detection System**
+- Checks git commit hash every 30 seconds as a fallback
+- Ensures detection even if file watchers fail
+- Bulletproof git change detection
 
-#### Quick Update (Manual)
-```powershell
-# Simple batch file for quick updates
-.\quick-update.bat
+### **Real-time File Watching**
+- Still monitors frontend source files (`src/`, `public/`, etc.) for development
+- Monitors `connections.js` for database configuration updates
+- Instant rebuilds during development
 
-# Or PowerShell script with more options
-.\auto-update.ps1
+## 🎯 What You Need to Do
 
-# Force update even with local changes
-.\auto-update.ps1 -Force
-```
+**Nothing!** The process is now completely automatic:
+
+1. **Run `git pull`** - Pull your latest changes  
+2. **Wait 30-60 seconds** - Service detects and rebuilds automatically
+3. **Refresh browser** - See your changes live!
+
+## 🔍 Behind the Scenes
+
+The service logs all activity so you can see what's happening:
+- `🔄 Service startup: Rebuilding frontend to ensure latest code...`
+- `🌍 Git pull detected - rebuilding frontend...`  
+- `✅ Frontend rebuild completed successfully`
+
+Check logs at: `C:\ProgramData\Red Gate\Logs\ChinookWebApp\`
+
+## 🛠️ Troubleshooting
+
+If changes don't appear after git pull:
+
+1. **Wait longer** (30-60 seconds for rebuild)
+2. **Hard refresh browser** (`Ctrl+F5`)  
+3. **Check service logs** for rebuild activity:
+   ```powershell
+   Get-Content "C:\ProgramData\Red Gate\Logs\ChinookWebApp\backend.log" -Tail 20
+   ```
+4. **Restart service** (last resort):
+   ```powershell
+   .\restart-services.ps1
+   ```
+
+## 🎯 Perfect for Demo VMs
+
+This automatic system is ideal for:
+- **Demo environments** where you need instant updates
+- **Development setups** with automatic git pull workflows  
+- **Production-like testing** without manual intervention
+- **Learning environments** where updates should "just work"
+
+## 🔧 Technical Details
+
+### Files Monitored:
+- **Git changes**: `.git/refs/heads/**`, `.git/HEAD`, `.git/index`, `.git/FETCH_HEAD`
+- **Frontend source**: `src/**/*`, `public/**/*` (during development)
+- **Configuration**: `connections.js`
+
+### Rebuild Process:
+1. Change detected → 1.5 second delay (for git completion)
+2. `npm run build` executed automatically  
+3. New files served from `dist/` folder
+4. Browser gets fresh content on next request
+
+### Logging:
+All activity logged to `C:\ProgramData\Red Gate\Logs\ChinookWebApp\backend.log`
+
+## ✨ No More Manual Steps!
+
+The days of manual rebuild scripts are over. Everything is now fully automatic! 🎉
 
 #### Scheduled Updates (Automated)
 ```powershell

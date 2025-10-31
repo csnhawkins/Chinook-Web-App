@@ -233,10 +233,20 @@ function setupFileWatcher() {
       setTimeout(() => rebuildFrontend(`change in ${filePath}`), 500); // Delay to batch changes
     });
 
-    // Watch for git changes (indicates git pull)
-    gitWatcher = chokidar.watch(['./.git/refs/heads/**', './.git/HEAD'], {
+    // Watch for git changes (indicates git pull) - multiple patterns for reliability
+    gitWatcher = chokidar.watch([
+      './.git/refs/heads/**',
+      './.git/HEAD', 
+      './.git/index',
+      './.git/FETCH_HEAD'
+    ], {
       persistent: true,
-      ignoreInitial: true
+      ignoreInitial: true,
+      atomic: true,
+      awaitWriteFinish: {
+        stabilityThreshold: 500,
+        pollInterval: 100
+      }
     });
 
     gitWatcher.on('change', (filePath) => {
@@ -244,7 +254,12 @@ function setupFileWatcher() {
       setTimeout(() => {
         console.log('🌍 Git pull detected - rebuilding frontend...');
         rebuildFrontend('git pull detected');
-      }, 1000); // Longer delay for git operations
+      }, 1500); // Longer delay for git operations to complete
+    });
+
+    gitWatcher.on('error', (error) => {
+      console.warn('⚠️ Git watcher error:', error.message);
+      // Don't fail completely, just log the error
     });
 
     console.log('�🔍 File watchers setup for:');
@@ -259,6 +274,38 @@ function setupFileWatcher() {
 
 // Initialize file watcher (conditional)
 setupFileWatcher();
+
+// Backup git change detection (in case file watcher fails)
+let lastGitCommit = currentGitCommit;
+setInterval(() => {
+  try {
+    let newGitCommit = null;
+    if (fs.existsSync('.git/HEAD')) {
+      const head = fs.readFileSync('.git/HEAD', 'utf8').trim();
+      if (head.startsWith('ref: ')) {
+        const ref = head.substring(5);
+        if (fs.existsSync(`.git/${ref}`)) {
+          newGitCommit = fs.readFileSync(`.git/${ref}`, 'utf8').trim();
+        }
+      } else {
+        newGitCommit = head;
+      }
+    }
+    
+    if (newGitCommit && lastGitCommit && newGitCommit !== lastGitCommit) {
+      console.log('🔄 Backup git check: Commit change detected');
+      console.log(`  Previous: ${lastGitCommit.substring(0, 8)}`);
+      console.log(`  Current:  ${newGitCommit.substring(0, 8)}`);
+      console.log('🌍 Git pull detected (backup check) - rebuilding frontend...');
+      rebuildFrontend('git pull detected (backup check)');
+      lastGitCommit = newGitCommit;
+    } else if (newGitCommit) {
+      lastGitCommit = newGitCommit;
+    }
+  } catch (err) {
+    // Silently ignore git check errors
+  }
+}, 30000); // Check every 30 seconds
 
 const defaultConnection = "production_mssql";
 
@@ -3832,4 +3879,10 @@ app.listen(3001, () => {
   console.log("🚀 Backend running on http://localhost:3001");
   console.log("🔧 Auto-rebuild enabled for frontend changes");
   console.log("🌍 Git pull detection active");
+  
+  // Always rebuild frontend on service startup to ensure latest code is served
+  setTimeout(() => {
+    console.log("🔄 Service startup: Rebuilding frontend to ensure latest code...");
+    rebuildFrontend('service startup');
+  }, 2000); // Wait 2 seconds for service to fully initialize
 });
