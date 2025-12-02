@@ -690,7 +690,7 @@ app.get('/api/invoices', async (req, res) => {
     }
 
     // Apply pagination and ordering
-    query = query.orderBy(`i.${invoiceIdCol}`, 'desc').limit(limit).offset(offset);
+    query = query.orderBy(`i.${invoiceIdCol}`, 'asc').limit(limit).offset(offset);
 
     console.log(`🔍 Invoice SQL: ${query.toString()}`);
 
