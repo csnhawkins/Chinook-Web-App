@@ -17,12 +17,12 @@ const connections = {
   },
   treated_mssql: {
     client: "mssql",
-    displayName: "Treated (SQL Server)",
+    displayName: "Development (SQL Server)",
     connection: {
       user: "Redgate",
       password: "Redg@te1",
       server: "localhost",
-      database: "Chinook_Treated",
+      database: "Chinook_Dev",
       options: {
         encrypt: true,
         trustServerCertificate: true,
