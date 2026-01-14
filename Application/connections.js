@@ -7,7 +7,7 @@ const connections = {
       user: "Redgate",
       password: "Redg@te1",
       server: "localhost",
-      database: "Chinook_FullRestore",
+      database: "Chinook_Prod",
       options: {
         encrypt: true,
         trustServerCertificate: true,
