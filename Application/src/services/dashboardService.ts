@@ -1,15 +1,8 @@
 interface DashboardStats {
   customerCount: number;
-  recentSalesCount: number;
+  totalInvoices: number;
   totalRevenue: number;
   albumCount?: number;
-}
-
-interface RecentSale {
-  invoiceId: number;
-  customerName: string;
-  total: number;
-  invoiceDate: string;
 }
 
 interface TopTrack {
@@ -45,19 +38,19 @@ export class DashboardService {
     return response.json();
   }
 
-  static async getRecentSales(connectionName?: string, timePeriod?: string): Promise<RecentSale[]> {
+  static async getTotalInvoices(connectionName?: string, timePeriod?: string): Promise<{ count: number; period?: string }> {
     const params = new URLSearchParams();
     if (connectionName) params.append('conn', connectionName);
     if (timePeriod) params.append('period', timePeriod);
     
-    const url = `${this.baseUrl}/recent-sales?${params.toString()}`;
+    const url = `${this.baseUrl}/total-invoices?${params.toString()}`;
     
-    console.log('Fetching recent sales from:', url);
+    console.log('Fetching total invoices from:', url);
     const response = await fetch(url);
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('Recent sales API error:', response.status, errorText);
-      throw new Error(`Failed to fetch recent sales: ${response.status} ${errorText}`);
+      console.error('Total invoices API error:', response.status, errorText);
+      throw new Error(`Failed to fetch total invoices: ${response.status} ${errorText}`);
     }
     return response.json();
   }
@@ -105,15 +98,15 @@ export class DashboardService {
 
   static async getDashboardStats(connectionName?: string, timePeriod?: string): Promise<DashboardStats> {
     try {
-      const [customerCount, recentSales, revenue] = await Promise.all([
+      const [customerCount, invoiceData, revenue] = await Promise.all([
         this.getCustomerCount(connectionName),
-        this.getRecentSales(connectionName, timePeriod),
+        this.getTotalInvoices(connectionName, timePeriod),
         this.getRevenue(connectionName, timePeriod)
       ]);
 
       return {
         customerCount: customerCount.count || 0,
-        recentSalesCount: recentSales.length || 0,
+        totalInvoices: invoiceData.count || 0,
         totalRevenue: revenue.total || 0
       };
     } catch (error) {

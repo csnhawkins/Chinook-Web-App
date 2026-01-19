@@ -1006,7 +1006,7 @@ app.get("/api/dashboard/customers", async (req, res) => {
   }
 });
 
-app.get("/api/dashboard/recent-sales", async (req, res) => {
+app.get("/api/dashboard/total-invoices", async (req, res) => {
   const db = getDb(req.query.conn);
   try {
     const tableName = getTableName('Invoice', req.query.conn);
@@ -1082,10 +1082,10 @@ app.get("/api/dashboard/recent-sales", async (req, res) => {
     
     const result = await query.count('* as count').first();
     const count = result ? (result.count || result.COUNT || result['count(*)'] || 0) : 0;
-    console.log(`📊 Sales count for ${period}: ${count}`);
+    console.log(`📊 Invoice count for ${period}: ${count}`);
     res.json({ count: parseInt(count), period });
   } catch (err) {
-    console.error("❌ Dashboard recent sales count failed:", err);
+    console.error("❌ Dashboard total invoices count failed:", err);
     res.status(500).json({ error: err.message, count: 0, period: req.query.period || 'alltime' });
   }
 });

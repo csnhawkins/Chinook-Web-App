@@ -9,7 +9,7 @@ const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const [stats, setStats] = useState({
     customerCount: 0,
-    recentSalesCount: 0,
+    totalInvoices: 0,
     totalRevenue: 0
   });
   const [loading, setLoading] = useState(false);
@@ -24,7 +24,7 @@ const Dashboard: React.FC = () => {
       }, 100);
       return () => clearTimeout(timer);
     } else {
-      setStats({ customerCount: 0, recentSalesCount: 0, totalRevenue: 0 });
+      setStats({ customerCount: 0, totalInvoices: 0, totalRevenue: 0 });
       setHasData(false);
     }
   }, [activeConnection, timePeriod]);
@@ -49,7 +49,7 @@ const Dashboard: React.FC = () => {
       addNotification('error', `Failed to load dashboard data: ${errorMessage}`);
       setHasData(false);
       // Set fallback data
-      setStats({ customerCount: 0, recentSalesCount: 0, totalRevenue: 0 });
+      setStats({ customerCount: 0, totalInvoices: 0, totalRevenue: 0 });
     } finally {
       setLoading(false);
     }
@@ -190,12 +190,12 @@ const Dashboard: React.FC = () => {
                 <Disc3 className="h-8 w-8 text-success-600" />
               </div>
               <div className="ml-4">
-                <p className="text-sm text-gray-600">Recent Sales</p>
+                <p className="text-sm text-gray-600">Total Invoices</p>
                 <p className="text-2xl font-bold text-gray-900">
                   {loading ? (
                     <Loader2 className="h-6 w-6 animate-spin inline" />
                   ) : hasData ? (
-                    stats.recentSalesCount > 0 ? stats.recentSalesCount.toLocaleString() : '0'
+                    stats.totalInvoices > 0 ? stats.totalInvoices.toLocaleString() : '0'
                   ) : (
                     '---'
                   )}
