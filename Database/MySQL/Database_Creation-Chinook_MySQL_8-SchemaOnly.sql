@@ -4,6 +4,10 @@
 --   DB Server: MySQL 8.0+
 --   Original Author: Luis Rocha (Evolved by Chris Hawkins at Redgate Software Ltd)
 --   License: https://github.com/lerocha/chinook-database/blob/master/LICENSE.md
+-----------------------------------------------------------------------------------
+--   Version: 1.0.0
+--   Last Updated: 2026-02-05
+--   Update Notes: Added named constraints for all tables
 -- ********************************************************************************/
 
 -- Optional: create and use a database
@@ -139,29 +143,33 @@ CREATE TABLE `Track`
     CONSTRAINT `PK_Track` PRIMARY KEY  (`TrackId`)
  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
-CREATE TABLE TrackReview (
-    ReviewId INT AUTO_INCREMENT PRIMARY KEY,
-    TrackId INT NOT NULL,
-    ReviewerName VARCHAR(100) NOT NULL,
-    Rating INT CHECK (Rating BETWEEN 1 AND 5),
-    ReviewText VARCHAR(1000),
-    ReviewDate DATE NOT NULL
-);
+CREATE TABLE `TrackReview` (
+    `ReviewId` INT AUTO_INCREMENT NOT NULL,
+    `TrackId` INT NOT NULL,
+    `ReviewerName` VARCHAR(100) NOT NULL,
+    `Rating` INT,
+    `ReviewText` VARCHAR(1000),
+    `ReviewDate` DATE NOT NULL,
+    CONSTRAINT `PK_TrackReview` PRIMARY KEY (`ReviewId`),
+    CONSTRAINT `CK_TrackReview_Rating` CHECK (`Rating` BETWEEN 1 AND 5)
+ ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
-CREATE TABLE AppConfig (
-    ConfigId INT AUTO_INCREMENT PRIMARY KEY,
-    ConfigKey VARCHAR(50) NOT NULL,
-    ConfigValue VARCHAR(200) NOT NULL
-);
+CREATE TABLE `AppConfig` (
+    `ConfigId` INT AUTO_INCREMENT NOT NULL,
+    `ConfigKey` VARCHAR(50) NOT NULL,
+    `ConfigValue` VARCHAR(200) NOT NULL,
+    CONSTRAINT `PK_AppConfig` PRIMARY KEY (`ConfigId`)
+ ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
-CREATE TABLE SystemLog (
-    LogId INT PRIMARY KEY,
-    InvoiceId INT NOT NULL,
-    LogDate DATE NOT NULL,
-    LogMessage VARCHAR(1000),
-    CONSTRAINT fk_SystemLog_Invoice FOREIGN KEY (InvoiceId)
-        REFERENCES Invoice(InvoiceId)
-);
+CREATE TABLE `SystemLog` (
+    `LogId` INT NOT NULL,
+    `InvoiceId` INT NOT NULL,
+    `LogDate` DATE NOT NULL,
+    `LogMessage` VARCHAR(1000),
+    CONSTRAINT `PK_SystemLog` PRIMARY KEY (`LogId`),
+    CONSTRAINT `fk_SystemLog_Invoice` FOREIGN KEY (`InvoiceId`)
+        REFERENCES `Invoice`(`InvoiceId`)
+ ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 /*******************************************************************************
    Create Primary Key Unique Indexes

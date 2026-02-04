@@ -4,6 +4,10 @@
 --   DB Server: SQL Server
 --   Original Author: Luis Rocha (Evolved by Chris Hawkins at Redgate Software Ltd)
 --   License: https://github.com/lerocha/chinook-database/blob/master/LICENSE.md
+-----------------------------------------------------------------------------------
+--   Version: 1.0.0
+--   Last Updated: 2026-02-05
+--   Update Notes: Added named constraints for all tables
 -- ********************************************************************************/
 
 /*******************************************************************************
@@ -128,30 +132,32 @@ CREATE TABLE [dbo].[Track]
     CONSTRAINT [PK_Track] PRIMARY KEY CLUSTERED ([TrackId])
 );
 
-
 -- Intentionally has NO PK and NO FK constraints
 CREATE TABLE TrackReview (
     ReviewId INT NOT NULL,               -- unique within this table, but no PK constraint
     TrackId INT NOT NULL,                 -- matches Track.TrackId logically, but no FK constraint
     ReviewerName NVARCHAR(100) NOT NULL,  -- matches Customer's full name logically, no FK
-    Rating INT CHECK (Rating BETWEEN 1 AND 5),
+    Rating INT,
     ReviewText NVARCHAR(1000),
-    ReviewDate DATETIME NOT NULL
+    ReviewDate DATETIME NOT NULL,
+    CONSTRAINT [CK_TrackReview_Rating] CHECK (Rating BETWEEN 1 AND 5)
 );
 
 CREATE TABLE SystemLog (
-    LogId INT NOT NULL PRIMARY KEY,
+    LogId INT NOT NULL,
     InvoiceId INT NOT NULL,
     LogDate DATETIME NOT NULL,
     LogMessage NVARCHAR(1000),
+    CONSTRAINT [PK_SystemLog] PRIMARY KEY CLUSTERED ([LogId]),
     CONSTRAINT FK_SystemLog_Invoice FOREIGN KEY (InvoiceId)
         REFERENCES Invoice (InvoiceId)
 );
 
 CREATE TABLE AppConfig (
-    ConfigId INT NOT NULL PRIMARY KEY,
+    ConfigId INT NOT NULL,
     ConfigKey NVARCHAR(50) NOT NULL,
-    ConfigValue NVARCHAR(200) NOT NULL
+    ConfigValue NVARCHAR(200) NOT NULL,
+    CONSTRAINT [PK_AppConfig] PRIMARY KEY CLUSTERED ([ConfigId])
 );
 
 GO

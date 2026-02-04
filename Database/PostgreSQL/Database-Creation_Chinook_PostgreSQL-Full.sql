@@ -5,6 +5,10 @@
    DB Server: PostgreSql
    Original Author: Luis Rocha (Evolved by Chris Hawkins at Redgate Software Ltd)
    License: https://github.com/lerocha/chinook-database/blob/master/LICENSE.md
+-------------------------------------------------------------------------------
+   Version: 1.0.0
+   Last Updated: 2026-02-05
+   Update Notes: Added named constraints for all tables
 ********************************************************************************/
 
 /*******************************************************************************
@@ -131,27 +135,30 @@ CREATE TABLE track
 
 -- track_review
 CREATE TABLE track_review (
-    review_id SERIAL PRIMARY KEY,
+    review_id SERIAL NOT NULL,
     track_id INT NOT NULL,
     reviewer_name VARCHAR(100) NOT NULL,
-    rating INT CHECK (rating BETWEEN 1 AND 5),
+    rating INT,
     review_text VARCHAR(1000),
-    review_date DATE NOT NULL
+    review_date DATE NOT NULL,
+    CONSTRAINT ck_track_review_rating CHECK (rating BETWEEN 1 AND 5)
 );
 
 
 CREATE TABLE app_config (
-    config_id SERIAL PRIMARY KEY,
+    config_id SERIAL NOT NULL,
     config_key VARCHAR(50) NOT NULL,
-    config_value VARCHAR(200) NOT NULL
+    config_value VARCHAR(200) NOT NULL,
+    CONSTRAINT pk_app_config PRIMARY KEY (config_id)
 );
 
 -- system_log
 CREATE TABLE system_log (
-    log_id INT PRIMARY KEY,
+    log_id INT NOT NULL,
     invoice_id INT NOT NULL REFERENCES invoice(invoice_id),
     log_date DATE NOT NULL,
-    log_message VARCHAR(1000)
+    log_message VARCHAR(1000),
+    CONSTRAINT pk_system_log PRIMARY KEY (log_id)
 );
 
 /*******************************************************************************
