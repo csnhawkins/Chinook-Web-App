@@ -10,7 +10,7 @@ DROP TABLE IF EXISTS offers CASCADE;
 
 -- Create Offers table with sample structure
 CREATE TABLE offers (
-    offer_id SERIAL PRIMARY KEY,
+    offer_id SERIAL,
     offer_name VARCHAR(255) NOT NULL,
     description TEXT,
     discount_percent DECIMAL(5,2),
@@ -23,6 +23,7 @@ CREATE TABLE offers (
     times_used INTEGER DEFAULT 0,
     created_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     created_by VARCHAR(100) DEFAULT 'System'
+    CONSTRAINT pk_offers PRIMARY KEY (offer_id)
 );
 
 -- Insert sample data

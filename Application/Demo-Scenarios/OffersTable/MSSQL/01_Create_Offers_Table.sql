@@ -12,7 +12,7 @@ GO
 
 -- Create Offers table with sample structure
 CREATE TABLE [dbo].[Offers] (
-    [OfferId] INT IDENTITY(1,1) PRIMARY KEY,
+    [OfferId] INT IDENTITY(1,1),
     [OfferName] NVARCHAR(255) NOT NULL,
     [Description] NVARCHAR(500),
     [DiscountPercent] DECIMAL(5,2),
@@ -24,7 +24,8 @@ CREATE TABLE [dbo].[Offers] (
     [MaxUses] INT,
     [TimesUsed] INT DEFAULT 0,
     [CreatedDate] DATETIME2 DEFAULT GETDATE(),
-    [CreatedBy] NVARCHAR(100) DEFAULT 'System'
+    [CreatedBy] NVARCHAR(100) DEFAULT 'System',
+    CONSTRAINT [PK_Offers] PRIMARY KEY ([OfferId])
 );
 GO
 

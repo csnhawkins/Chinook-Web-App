@@ -10,7 +10,7 @@ DROP TABLE IF EXISTS `offers`;
 
 -- Create Offers table with sample structure
 CREATE TABLE `offers` (
-    `offer_id` INT AUTO_INCREMENT PRIMARY KEY,
+    `offer_id` INT AUTO_INCREMENT,
     `offer_name` VARCHAR(255) NOT NULL,
     `description` TEXT,
     `discount_percent` DECIMAL(5,2),
@@ -22,7 +22,8 @@ CREATE TABLE `offers` (
     `max_uses` INT,
     `times_used` INT DEFAULT 0,
     `created_date` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    `created_by` VARCHAR(100) DEFAULT 'System'
+    `created_by` VARCHAR(100) DEFAULT 'System',
+    CONSTRAINT `pk_offers` PRIMARY KEY (`offer_id`)
 ) ENGINE=InnoDB;
 
 -- Insert sample data
