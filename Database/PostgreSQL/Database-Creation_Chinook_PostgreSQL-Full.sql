@@ -154,10 +154,10 @@ CREATE TABLE app_config (
 
 -- system_log
 CREATE TABLE system_log (
-    log_id INT NOT NULL,
+    log_id SERIAL NOT NULL,
     invoice_id INT NOT NULL REFERENCES invoice(invoice_id),
-    log_date DATE NOT NULL,
-    log_message VARCHAR(1000),
+    log_date TIMESTAMP NOT NULL,
+    log_message TEXT,
     CONSTRAINT pk_system_log PRIMARY KEY (log_id)
 );
 

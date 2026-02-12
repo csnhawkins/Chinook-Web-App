@@ -1749,6 +1749,61 @@ def write_postgresql_format(f, artists, albums, tracks, customers, invoices, inv
         f.write(",\n".join(batch))
         f.write(";\n\n")
     
+    # SystemLog - optional table for database size inflation
+    if systemlog and len(systemlog) > 0:
+        f.write("-- SystemLog entries for database size inflation\n")
+        f.write("-- Note: Only inserts if systemlog table exists in the database\n")
+        f.write("-- PostgreSQL generates ~7.8KB padding per row using REPEAT() for fast insertion\n\n")
+        
+        # Check if table exists
+        f.write("DO $$\n")
+        f.write("BEGIN\n")
+        f.write("  IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'systemlog') THEN\n")
+        
+        # Process in batches
+        total_batches = (len(systemlog) + batch_size - 1) // batch_size
+        for batch_num in range(0, len(systemlog), batch_size):
+            batch_end = min(batch_num + batch_size, len(systemlog))
+            batch_index = batch_num // batch_size + 1
+            
+            # PostgreSQL doesn't have PRINT, but we can use RAISE NOTICE
+            progress_interval = 5 if total_batches >= 20 else 1
+            if batch_index % progress_interval == 1:
+                f.write(f"    RAISE NOTICE 'Inserting system log entries... batch % of %', {batch_index}, {total_batches};\n")
+            
+            # Write batch
+            postgres_systemlog = []
+            for idx in range(batch_num, batch_end):
+                log_entry = systemlog[idx]
+                # Convert from (log_id, invoice_id, 'YYYY/MM/DD', N'message')
+                # to PostgreSQL format with TIMESTAMP and single quotes
+                log_clean = log_entry.strip()
+                if log_clean.startswith("("):
+                    log_clean = log_clean[1:]
+                if log_clean.endswith(")"):
+                    log_clean = log_clean[:-1]
+                
+                # Parse the fields
+                parts = log_clean.split(", ", 3)
+                log_id = parts[0]
+                invoice_id = parts[1]
+                log_date = parts[2].strip("'")
+                log_msg = parts[3].replace("N'", "'")
+                
+                # Convert YYYY/MM/DD to YYYY-MM-DD
+                log_date = log_date.replace("/", "-")
+                
+                postgres_systemlog.append(f"    ({log_id}, {invoice_id}, TIMESTAMP '{log_date}', {log_msg})")
+            
+            f.write("    INSERT INTO systemlog (log_id, invoice_id, log_date, log_message) OVERRIDING SYSTEM VALUE\n")
+            f.write("    SELECT log_id, invoice_id, log_date, log_message || ' | ' || REPEAT('PADDING_', 70000)\n")
+            f.write("    FROM (VALUES\n")
+            f.write(",\n".join(postgres_systemlog))
+            f.write("\n    ) AS log_data(log_id, invoice_id, log_date, log_message);\n\n")
+        
+        f.write("  END IF;\n")
+        f.write("END $$;\n\n")
+    
     # Commit transaction
     f.write("-- Commit transaction\n")
     f.write("COMMIT;\n")
