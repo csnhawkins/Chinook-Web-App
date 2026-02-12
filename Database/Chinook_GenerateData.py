@@ -1934,14 +1934,11 @@ def write_mysql_format(f, artists, albums, tracks, customers, invoices, invoice_
             batch_end = min(batch_num + batch_size, len(systemlog))
             batch_index = batch_num // batch_size + 1
             
-            # Write batch with conditional execution
+            # Write batch with conditional execution using prepared statement
             f.write(f"-- Batch {batch_index} of {total_batches}\n")
-            f.write("SET @sql = IF(@table_exists > 0, '\n")
-            f.write("INSERT INTO `SystemLog` (`InvoiceId`, `LogDate`, `LogMessage`)\n")
-            f.write("SELECT InvoiceId, LogDate, CONCAT(LogMessage, \" | \", REPEAT(\"PADDING_\", 70000))\n")
-            f.write("FROM (VALUES\n")
             
-            # Write batch items
+            # Build the VALUES list
+            mysql_systemlog_values = []
             for idx in range(batch_num, batch_end):
                 log_entry = systemlog[idx]
                 # Convert from (log_id, invoice_id, 'YYYY/MM/DD', N'message')
@@ -1956,16 +1953,17 @@ def write_mysql_format(f, artists, albums, tracks, customers, invoices, invoice_
                 parts = log_clean.split(", ", 3)
                 # Skip log_id (parts[0]) since it's AUTO_INCREMENT
                 invoice_id = parts[1]
-                log_date = parts[2]
-                log_msg = parts[3].replace("N'", "'")
+                log_date = parts[2].strip("'")  # Remove quotes
+                log_msg = parts[3].replace("N'", "'").replace("'", "\\\\'")  # Escape for prepared statement
                 
-                # MySQL uses ROW() for multi-column values
-                if idx < batch_end - 1:
-                    f.write(f"    ROW({invoice_id}, {log_date}, {log_msg}),\n")
-                else:
-                    f.write(f"    ROW({invoice_id}, {log_date}, {log_msg})\n")
+                # Build the value with CONCAT for padding
+                mysql_systemlog_values.append(f"    ({invoice_id}, '{log_date}', CONCAT({log_msg}, ' | ', REPEAT('PADDING_', 70000)))")
             
-            f.write(") AS log_data(InvoiceId, LogDate, LogMessage)', '');\n")
+            # Write as prepared statement
+            f.write("SET @sql = IF(@table_exists > 0, '\n")
+            f.write("INSERT INTO `SystemLog` (`InvoiceId`, `LogDate`, `LogMessage`) VALUES\n")
+            f.write(",\n".join(mysql_systemlog_values))
+            f.write("', '');\n")
             f.write("PREPARE stmt FROM @sql;\n")
             f.write("EXECUTE stmt;\n")
             f.write("DEALLOCATE PREPARE stmt;\n\n")
