@@ -528,8 +528,6 @@ def generate_invoices(start_id=413, count=3588, customer_count=1000, customer_id
                     postal = parts[0]
             else:
                 postal = postal_prefix
-        else:
-            postal = postal_prefix
         
         state_str = f"N'{state}'" if state else 'NULL'
         
