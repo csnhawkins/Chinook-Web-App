@@ -705,6 +705,7 @@ def insert_to_sqlserver(server, database, sql_file, auth_type='windows', usernam
     """Execute SQL file directly into SQL Server database using sqlcmd utility"""
     import subprocess
     import os
+    import time
     
     try:
         # Build sqlcmd command
@@ -731,6 +732,8 @@ def insert_to_sqlserver(server, database, sql_file, auth_type='windows', usernam
         print(f"Executing SQL file via sqlcmd: {server}/{database}...")
         print(f"  File: {sql_file}\n")
         
+        start_time = time.time()
+        
         # Execute sqlcmd with real-time output
         process = subprocess.Popen(
             cmd,
@@ -756,6 +759,8 @@ def insert_to_sqlserver(server, database, sql_file, auth_type='windows', usernam
         process.wait()
         stderr_output = process.stderr.read()
         
+        elapsed_time = time.time() - start_time
+        
         # Check for errors
         if process.returncode != 0:
             print("\n" + "=" * 80)
@@ -766,6 +771,7 @@ def insert_to_sqlserver(server, database, sql_file, auth_type='windows', usernam
         
         print("\n" + "=" * 80)
         print("SUCCESS: All data inserted directly into SQL Server database!")
+        print(f"Total execution time: {elapsed_time:.2f} seconds ({elapsed_time/60:.2f} minutes)")
         print("=" * 80)
         return True
         
@@ -1100,15 +1106,15 @@ def write_mssql_format(f, artists, albums, tracks, customers, invoices, invoice_
     
     # Add transaction wrapper for atomicity
     f.write("-- Begin transaction for bulk insert\n")
-    f.write("BEGIN TRANSACTION;\n")
+    f.write("PRINT 'Starting data insertion at ' + CONVERT(VARCHAR, GETDATE(), 120);\n")
     f.write("GO\n\n")
     
-    f.write("PRINT 'Starting data insertion...';\n")
+    f.write("BEGIN TRANSACTION;\n")
     f.write("GO\n\n")
     
     # Artists - has IDENTITY, need to specify IDs explicitly
     f.write("-- Additional artists (276-355) - Real chart artists\n")
-    f.write("PRINT 'Inserting artists...';\n")
+    f.write("PRINT '[' + CONVERT(VARCHAR, GETDATE(), 120) + '] Inserting artists...';\n")
     f.write("GO\n")
     f.write("SET IDENTITY_INSERT [dbo].[Artist] ON;\n")
     f.write("INSERT INTO [dbo].[Artist] ([ArtistId], [Name]) VALUES\n")
@@ -1130,7 +1136,7 @@ def write_mssql_format(f, artists, albums, tracks, customers, invoices, invoice_
     
     # Albums - has IDENTITY, need to specify IDs explicitly with batching
     f.write("-- Additional albums (348-507) - Real chart albums\n")
-    f.write("PRINT 'Inserting albums...';\n")
+    f.write("PRINT '[' + CONVERT(VARCHAR, GETDATE(), 120) + '] Inserting albums...';\n")
     f.write("GO\n")
     
     # Batch the inserts
@@ -1165,7 +1171,7 @@ def write_mssql_format(f, artists, albums, tracks, customers, invoices, invoice_
     
     # Tracks - has IDENTITY, need to specify IDs explicitly with batching
     f.write("-- Additional tracks (3504-3942) - Real chart tracks\n")
-    f.write("PRINT 'Inserting tracks...';\n")
+    f.write("PRINT '[' + CONVERT(VARCHAR, GETDATE(), 120) + '] Inserting tracks...';\n")
     f.write("GO\n")
     
     # Batch the inserts
@@ -1210,7 +1216,7 @@ def write_mssql_format(f, artists, albums, tracks, customers, invoices, invoice_
         
         # Add progress message every 10 batches
         if batch_index % 10 == 1 and total_batches >= 10:
-            f.write(f"PRINT 'Inserting customers... batch {batch_index} of {total_batches}';\n")
+            f.write(f"PRINT '[' + CONVERT(VARCHAR, GETDATE(), 120) + '] Inserting customers... batch {batch_index} of {total_batches}';\n")
             f.write("GO\n")
         
         f.write("SET IDENTITY_INSERT [dbo].[Customer] ON;\n")
@@ -1246,7 +1252,7 @@ def write_mssql_format(f, artists, albums, tracks, customers, invoices, invoice_
         
         # Add progress message every 10 batches
         if batch_index % 10 == 1 and total_batches >= 10:
-            f.write(f"PRINT 'Inserting invoices... batch {batch_index} of {total_batches}';\n")
+            f.write(f"PRINT '[' + CONVERT(VARCHAR, GETDATE(), 120) + '] Inserting invoices... batch {batch_index} of {total_batches}';\n")
             f.write("GO\n")
         
         f.write("SET IDENTITY_INSERT [dbo].[Invoice] ON;\n")
@@ -1283,7 +1289,7 @@ def write_mssql_format(f, artists, albums, tracks, customers, invoices, invoice_
         
         # Add progress message every 10 batches
         if batch_index % 10 == 1 and total_batches >= 10:
-            f.write(f"PRINT 'Inserting invoice lines... batch {batch_index} of {total_batches}';\n")
+            f.write(f"PRINT '[' + CONVERT(VARCHAR, GETDATE(), 120) + '] Inserting invoice lines... batch {batch_index} of {total_batches}';\n")
             f.write("GO\n")
         
         f.write("SET IDENTITY_INSERT [dbo].[InvoiceLine] ON;\n")
@@ -1295,11 +1301,12 @@ def write_mssql_format(f, artists, albums, tracks, customers, invoices, invoice_
     
     # Commit transaction
     f.write("-- Commit all changes\n")
-    f.write("PRINT 'Committing transaction...';\n")
+    f.write("PRINT '[' + CONVERT(VARCHAR, GETDATE(), 120) + '] Committing transaction...';\n")
     f.write("GO\n")
     f.write("COMMIT TRANSACTION;\n")
-    f.write("GO\n")
-    f.write("PRINT 'Data insertion completed successfully!';\n")
+    f.write("GO\n\n")
+    
+    f.write("PRINT '[' + CONVERT(VARCHAR, GETDATE(), 120) + '] Data insertion completed successfully!';\n")
     f.write("GO\n")
 
 def write_oracle_format(f, artists, albums, tracks, customers, invoices, invoice_lines):
