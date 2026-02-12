@@ -1951,7 +1951,7 @@ def write_mysql_format(f, artists, albums, tracks, customers, invoices, invoice_
                 # Skip log_id (parts[0]) since it's AUTO_INCREMENT
                 invoice_id = parts[1]
                 log_date = parts[2].strip("'")  # Remove quotes
-                log_msg = parts[3].replace("N'", "'").replace("'", "''")  # MySQL uses '' to escape quotes
+                log_msg = parts[3].replace("N'", "'")  # Just replace N' with ' - quotes are already properly escaped
                 
                 # Build the value with CONCAT for padding
                 if idx < batch_end - 1:
