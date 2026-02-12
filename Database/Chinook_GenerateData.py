@@ -805,25 +805,6 @@ def main():
         
         print()
         
-        # Ask about existing customers
-        print("Does your database already have the original 59 customers?")
-        print("  1. Yes - database has original customers (IDs 1-59)")
-        print("  2. No - database is empty or only has custom data")
-        print()
-        
-        while True:
-            has_original = input("Enter choice (1-2, default: 1): ").strip()
-            if has_original in ['', '1']:
-                customer_id_start = 1
-                break
-            elif has_original == '2':
-                customer_id_start = 60
-                break
-            else:
-                print("Invalid choice. Please enter 1 or 2.")
-        
-        print()
-        
         # Ask for insertion mode (only for single database, not 'all')
         if db_type != 'all':
             print("Select insertion mode:")
@@ -931,7 +912,6 @@ def main():
         # Default counts for command line mode
         new_customers = int(sys.argv[2]) if len(sys.argv) > 2 else 941
         new_invoices = int(sys.argv[3]) if len(sys.argv) > 3 else 3588
-        customer_id_start = 1  # Assume original data exists in command line mode
     
     databases_to_generate = [db_type] if db_type != 'all' else ['mssql', 'oracle', 'postgresql', 'mysql']
     
@@ -951,7 +931,8 @@ def main():
     print(f"Generating {total_invoices:,} invoices for 2022-2026 (Jan 1, 2022 - Jan 19, 2026)...")
     print()
     
-    invoices, invoice_lines = generate_invoices(start_id=413, count=new_invoices, customer_count=total_customers, customer_id_start=customer_id_start)
+    # Only reference the new customers we're generating (60+) to avoid dependency on original data
+    invoices, invoice_lines = generate_invoices(start_id=413, count=new_invoices, customer_count=new_customers, customer_id_start=60)
     
     print(f"✓ Generated {len(invoices):,} new invoices")
     print(f"✓ Generated {len(invoice_lines):,} new invoice lines")
