@@ -258,14 +258,31 @@ LOCATIONS = [
 ]
 
 def generate_customers(start_id=60, count=941):
-    """Generate realistic customer data"""
+    """Generate realistic customer data
+    
+    Returns:
+        tuple: (customers_sql_list, customers_dict)
+            - customers_sql_list: List of SQL INSERT values
+            - customers_dict: Dict mapping customer_id to customer data for invoice generation
+    """
     customers = []
+    customers_dict = {}  # Store customer data for invoice billing addresses
     used_emails = set()
     
     for i in range(count):
         customer_id = start_id + i
         first_name = random.choice(FIRST_NAMES)
         last_name = random.choice(LAST_NAMES)
+        
+        # Add middle initial (40% chance) and suffix (5% chance) for variety
+        if random.random() < 0.40:
+            middle_initial = random.choice('ABCDEFGHIJKLMNOPQRSTUVWXYZ')
+            first_name = f"{first_name} {middle_initial}."
+        
+        if random.random() < 0.05:
+            suffix = random.choice(['Jr.', 'Sr.', 'III', 'II', 'IV'])
+            last_name = f"{last_name} {suffix}"
+        
         location = random.choice(LOCATIONS)
         country, city, state, postal_prefix, phone_prefix, email_domain = location
         
@@ -316,13 +333,99 @@ def generate_customers(start_id=60, count=941):
                            'Development Solutions', 'Software Systems', 'IT Services Ltd']
             company = random.choice(company_names)
         
+        # Store customer data for invoice billing
+        customers_dict[customer_id] = {
+            'address': address,
+            'city': city,
+            'state': state,
+            'country': country,
+            'postal': postal
+        }
+        
         state_str = f"N'{state}'" if state else 'NULL'
         company_str = f"N'{company}'" if company else 'NULL'
         
         customer = f"    (N'{first_name}', N'{last_name}', {company_str}, N'{address}', N'{city}', {state_str}, N'{country}', N'{postal}', N'{phone}', NULL, N'{email}', {support_rep})"
         customers.append(customer)
     
-    return customers
+    return customers, customers_dict
+
+def generate_systemlog(start_id=1, count=50000):
+    """Generate SystemLog entries for database size inflation
+    
+    Creates realistic-looking but repetitive log data that inflates database size.
+    Optimized for fast generation while still creating substantial data.
+    
+    Args:
+        start_id: Starting log ID
+        count: Number of log entries (default 50,000 creates ~5-10MB)
+    
+    Returns:
+        List of SQL INSERT values for SystemLog table
+    """
+    log_entries = []
+    
+    # Template messages with variations for realistic but fast generation
+    log_templates = [
+        "User authentication successful for session {0}",
+        "Database query executed in {1}ms - SELECT * FROM Customer WHERE CustomerId = {0}",
+        "API request received: GET /api/invoices/{0} - Response: 200 OK",
+        "Cache refreshed for key: customer_data_{0} - Size: {2}KB",
+        "Email notification sent to customer {0} - Delivery confirmed",
+        "Payment processed successfully - Transaction ID: TXN{0} - Amount: ${3}",
+        "Data backup completed - Table: InvoiceLine - Rows: {0} - Duration: {1}s",
+        "System health check passed - CPU: {4}% - Memory: {5}% - Disk: {6}%",
+        "Report generated: Monthly Sales Report {0} - Format: PDF - Size: {2}MB",
+        "User session expired - SessionID: SES{0} - Duration: {1} minutes",
+        "Database connection pool status - Active: {0} - Idle: {4} - Max: 100",
+        "Search query executed: '{7}' - Results: {0} - Time: {1}ms",
+        "File uploaded successfully - FileID: FILE{0} - Size: {2}MB - Type: PDF",
+        "Background job completed - JobID: JOB{0} - Status: Success - Duration: {1}s",
+        "API rate limit check - User: {0} - Requests: {4}/1000 - Window: 1 hour"
+    ]
+    
+    log_levels = ['INFO', 'INFO', 'INFO', 'INFO', 'WARNING', 'DEBUG', 'DEBUG', 'ERROR']  # Weighted toward INFO
+    search_terms = ['jazz', 'rock', 'classical', 'pop', 'blues', 'metal', 'country', 'soul']
+    
+    # Start date: Jan 1, 2022
+    start_date = datetime(2022, 1, 1)
+    end_date = datetime(2026, 1, 19)
+    total_days = (end_date - start_date).days
+    
+    for i in range(count):
+        log_id = start_id + i
+        
+        # Random timestamp
+        random_days = random.randint(0, total_days)
+        log_time = start_date + timedelta(days=random_days, 
+                                          hours=random.randint(0, 23),
+                                          minutes=random.randint(0, 59),
+                                          seconds=random.randint(0, 59))
+        timestamp = log_time.strftime('%Y-%m-%d %H:%M:%S')
+        
+        # Random log level and template
+        level = random.choice(log_levels)
+        template = random.choice(log_templates)
+        
+        # Fill template with random data
+        message = template.format(
+            random.randint(1, 10000),           # {0} - generic ID
+            random.randint(10, 5000),           # {1} - time/duration
+            random.randint(1, 500),             # {2} - size in KB/MB
+            round(random.uniform(0.99, 99.99), 2),  # {3} - dollar amount
+            random.randint(10, 95),             # {4} - percentage/count
+            random.randint(20, 80),             # {5} - percentage
+            random.randint(30, 70),             # {6} - percentage
+            random.choice(search_terms)         # {7} - search term
+        )
+        
+        # Escape single quotes
+        message_escaped = message.replace("'", "''")
+        
+        log_entry = f"    ({log_id}, '{timestamp}', N'{level}', N'{message_escaped}')"
+        log_entries.append(log_entry)
+    
+    return log_entries
 
 def generate_invoices(start_id=413, count=3588, customer_count=1000, customer_id_start=1):
     """Generate realistic invoice data for 2022-2026 (Jan 1, 2022 - Jan 19, 2026)
@@ -394,25 +497,37 @@ def generate_invoices(start_id=413, count=3588, customer_count=1000, customer_id
         
         invoice_total = round(invoice_total, 2)
         
-        # Get random location for billing address
-        location = random.choice(LOCATIONS)
-        country, city, state, postal_prefix, _, _ = location
-        
-        street_num = random.randint(1, 9999)
-        street_names = ['Main St', 'High St', 'Park Ave', 'Oak Rd', 'Maple Dr', 'Church St']
-        billing_address = f"{street_num} {random.choice(street_names)}"
-        
-        if '-' in postal_prefix:
-            parts = postal_prefix.split('-')
-            if parts[0].replace(' ', '').isdigit() and parts[1].replace(' ', '').isdigit():
-                min_val = int(parts[0].replace(' ', ''))
-                max_val = int(parts[1].replace(' ', ''))
-                if min_val < max_val:
-                    postal = str(random.randint(min_val, max_val))
+        # Use customer's billing address (90% of the time) or generate random address (10% for different shipping)
+        if customers_dict and customer_id in customers_dict and random.random() < 0.90:
+            # Use customer's actual address
+            customer_data = customers_dict[customer_id]
+            billing_address = customer_data['address']
+            city = customer_data['city']
+            state = customer_data['state']
+            country = customer_data['country']
+            postal = customer_data['postal']
+        else:
+            # Generate random billing address (for gift purchases, work address, etc.)
+            location = random.choice(LOCATIONS)
+            country, city, state, postal_prefix, _, _ = location
+            
+            street_num = random.randint(1, 9999)
+            street_names = ['Main St', 'High St', 'Park Ave', 'Oak Rd', 'Maple Dr', 'Church St']
+            billing_address = f"{street_num} {random.choice(street_names)}"
+            
+            if '-' in postal_prefix:
+                parts = postal_prefix.split('-')
+                if parts[0].replace(' ', '').isdigit() and parts[1].replace(' ', '').isdigit():
+                    min_val = int(parts[0].replace(' ', ''))
+                    max_val = int(parts[1].replace(' ', ''))
+                    if min_val < max_val:
+                        postal = str(random.randint(min_val, max_val))
+                    else:
+                        postal = parts[0]
                 else:
                     postal = parts[0]
             else:
-                postal = parts[0]
+                postal = postal_prefix
         else:
             postal = postal_prefix
         
@@ -917,6 +1032,33 @@ def main():
                 print("Invalid number. Please try again.")
         
         print()
+        print("Generate SystemLog data for database size inflation?")
+        print("  SystemLog contains log entries that inflate database size")
+        print("  Useful for demonstrating database subsetting/optimization")
+        print("  50,000 entries ≈ 5-10MB | 500,000 entries ≈ 50-100MB")
+        while True:
+            systemlog_choice = input("Generate SystemLog? (y/n, default: n): ").strip().lower()
+            if systemlog_choice in ['', 'n', 'no']:
+                generate_systemlog_data = False
+                systemlog_count = 0
+                break
+            elif systemlog_choice in ['y', 'yes']:
+                generate_systemlog_data = True
+                while True:
+                    try:
+                        systemlog_input = input("  Enter number of log entries (default 50000): ").strip()
+                        systemlog_count = int(systemlog_input) if systemlog_input else 50000
+                        if systemlog_count < 0:
+                            print("  Please enter a positive number.")
+                            continue
+                        break
+                    except ValueError:
+                        print("  Invalid number. Please try again.")
+                break
+            else:
+                print("Please enter 'y' or 'n'.")
+        
+        print()
     else:
         # Command line mode - always use file generation
         insertion_mode = 'file'
@@ -931,6 +1073,8 @@ def main():
         # Default counts for command line mode
         new_customers = int(sys.argv[2]) if len(sys.argv) > 2 else 941
         new_invoices = int(sys.argv[3]) if len(sys.argv) > 3 else 3588
+        generate_systemlog_data = False
+        systemlog_count = 0
     
     databases_to_generate = [db_type] if db_type != 'all' else ['mssql', 'oracle', 'postgresql', 'mysql']
     
@@ -941,7 +1085,7 @@ def main():
     print(f"Generating {total_customers:,} customers with diverse, realistic data...")
     print()
     
-    customers = generate_customers(start_id=60, count=new_customers)
+    customers, customers_dict = generate_customers(start_id=60, count=new_customers)
     
     print(f"✓ Generated {len(customers):,} new customers")
     print(f"  Total customers: {total_customers:,} (59 original + {new_customers:,} new)")
@@ -951,7 +1095,7 @@ def main():
     print()
     
     # Only reference the new customers we're generating (60+) to avoid dependency on original data
-    invoices, invoice_lines = generate_invoices(start_id=413, count=new_invoices, customer_count=new_customers, customer_id_start=60)
+    invoices, invoice_lines = generate_invoices(start_id=413, count=new_invoices, customer_count=new_customers, customer_id_start=60, customers_dict=customers_dict)
     
     print(f"✓ Generated {len(invoices):,} new invoices")
     print(f"✓ Generated {len(invoice_lines):,} new invoice lines")
@@ -968,6 +1112,19 @@ def main():
     print(f"✓ Generated {len(tracks)} tracks")
     print()
     
+    # Generate SystemLog if requested
+    if generate_systemlog_data:
+        print(f"Generating {systemlog_count:,} SystemLog entries for database size inflation...")
+        print()
+        
+        systemlog = generate_systemlog(start_id=1, count=systemlog_count)
+        
+        print(f"✓ Generated {len(systemlog):,} log entries")
+        print(f"  Estimated size: ~{(len(systemlog) * 150) // (1024 * 1024)}-{(len(systemlog) * 200) // (1024 * 1024)}MB")
+        print()
+    else:
+        systemlog = []
+    
     # Insert or generate files based on mode
     if insertion_mode == 'direct':
         # Direct database insertion - can insert to multiple databases with same data
@@ -980,7 +1137,7 @@ def main():
                 
                 print(f"Generating SQL file: {output_file}...")
                 with open(output_file, 'w', encoding='utf-8') as f:
-                    write_mssql_format(f, artists, albums, tracks, customers, invoices, invoice_lines)
+                    write_mssql_format(f, artists, albums, tracks, customers, invoices, invoice_lines, systemlog)
                 print(f"  ✓ SQL file generated\n")
                 
                 # Execute the file directly to the database
@@ -1073,13 +1230,13 @@ def main():
             
             with open(output_file, 'w', encoding='utf-8') as f:
                 if db == 'mssql':
-                    write_mssql_format(f, artists, albums, tracks, customers, invoices, invoice_lines)
+                    write_mssql_format(f, artists, albums, tracks, customers, invoices, invoice_lines, systemlog)
                 elif db == 'oracle':
-                    write_oracle_format(f, artists, albums, tracks, customers, invoices, invoice_lines)
+                    write_oracle_format(f, artists, albums, tracks, customers, invoices, invoice_lines, systemlog)
                 elif db == 'postgresql':
-                    write_postgresql_format(f, artists, albums, tracks, customers, invoices, invoice_lines)
+                    write_postgresql_format(f, artists, albums, tracks, customers, invoices, invoice_lines, systemlog)
                 elif db == 'mysql':
-                    write_mysql_format(f, artists, albums, tracks, customers, invoices, invoice_lines)
+                    write_mysql_format(f, artists, albums, tracks, customers, invoices, invoice_lines, systemlog)
             
             print(f"  ✓ {output_file}")
     
@@ -1100,7 +1257,7 @@ def main():
         print("  - SQL file generated and executed directly to database")
     print("=" * 80)
 
-def write_mssql_format(f, artists, albums, tracks, customers, invoices, invoice_lines):
+def write_mssql_format(f, artists, albums, tracks, customers, invoices, invoice_lines, systemlog):
     """Write data in SQL Server format with batching (max 1000 rows per INSERT)"""
     batch_size = 1000
     
@@ -1299,6 +1456,48 @@ def write_mssql_format(f, artists, albums, tracks, customers, invoices, invoice_
         f.write("SET IDENTITY_INSERT [dbo].[InvoiceLine] OFF;\n")
         f.write("GO\n\n")
     
+    # SystemLog - optional table for database size inflation
+    if systemlog and len(systemlog) > 0:
+        f.write("-- Additional system log entries (1+) - Database size inflation\n")
+        f.write("-- Note: Only inserts if SystemLog table exists in the database\n")
+        
+        # Write batches directly without building full list in memory
+        total_batches = (len(systemlog) + batch_size - 1) // batch_size
+        for batch_num in range(0, len(systemlog), batch_size):
+            batch_end = min(batch_num + batch_size, len(systemlog))
+            batch_index = batch_num // batch_size + 1
+            
+            # Add progress message every 10 batches
+            if batch_index % 10 == 1 and total_batches >= 10:
+                f.write(f"PRINT '[' + CONVERT(VARCHAR, GETDATE(), 120) + '] Inserting system log entries... batch {batch_index} of {total_batches}';\n")
+                f.write("GO\n")
+            
+            # Check if table exists before each batch
+            f.write("IF EXISTS (SELECT * FROM sys.tables WHERE name = 'SystemLog')\n")
+            f.write("BEGIN\n")
+            f.write("SET IDENTITY_INSERT [dbo].[SystemLog] ON;\n")
+            f.write("INSERT INTO [dbo].[SystemLog] ([LogId], [Timestamp], [LogLevel], [Message]) VALUES\n")
+            
+            # Write batch items
+            for idx in range(batch_num, batch_end):
+                i = 1 + idx
+                log_entry = systemlog[idx]
+                clean = log_entry.strip()
+                if clean.startswith("("):
+                    clean = clean[1:]
+                if clean.endswith(")"):
+                    clean = clean[:-1]
+                
+                if idx < batch_end - 1:
+                    f.write(f"    ({i}, {clean}),\n")
+                else:
+                    f.write(f"    ({i}, {clean})\n")
+            
+            f.write(";\n")
+            f.write("SET IDENTITY_INSERT [dbo].[SystemLog] OFF;\n")
+            f.write("END\n")
+            f.write("GO\n\n")
+    
     # Commit transaction
     f.write("-- Commit all changes\n")
     f.write("PRINT '[' + CONVERT(VARCHAR, GETDATE(), 120) + '] Committing transaction...';\n")
@@ -1309,7 +1508,7 @@ def write_mssql_format(f, artists, albums, tracks, customers, invoices, invoice_
     f.write("PRINT '[' + CONVERT(VARCHAR, GETDATE(), 120) + '] Data insertion completed successfully!';\n")
     f.write("GO\n")
 
-def write_oracle_format(f, artists, albums, tracks, customers, invoices, invoice_lines):
+def write_oracle_format(f, artists, albums, tracks, customers, invoices, invoice_lines, systemlog):
     """Write data in Oracle format using INSERT ALL with batching"""
     batch_size = 500  # Oracle INSERT ALL limit
     
@@ -1450,7 +1649,7 @@ def write_oracle_format(f, artists, albums, tracks, customers, invoices, invoice
     f.write("-- Commit transaction\n")
     f.write("COMMIT;\n")
 
-def write_postgresql_format(f, artists, albums, tracks, customers, invoices, invoice_lines):
+def write_postgresql_format(f, artists, albums, tracks, customers, invoices, invoice_lines, systemlog):
     """Write data in PostgreSQL format (lowercase, no brackets) with batching"""
     import re
     batch_size = 1000
@@ -1519,7 +1718,7 @@ def write_postgresql_format(f, artists, albums, tracks, customers, invoices, inv
     f.write("-- Commit transaction\n")
     f.write("COMMIT;\n")
 
-def write_mysql_format(f, artists, albums, tracks, customers, invoices, invoice_lines):
+def write_mysql_format(f, artists, albums, tracks, customers, invoices, invoice_lines, systemlog):
     """Write data in MySQL format (backticks, single quotes) with batching"""
     batch_size = 1000
     
