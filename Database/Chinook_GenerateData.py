@@ -1925,20 +1925,17 @@ def write_mysql_format(f, artists, albums, tracks, customers, invoices, invoice_
         f.write("-- Note: Only inserts if SystemLog table exists in the database\n")
         f.write("-- MySQL generates ~7.8KB padding per row using REPEAT() for fast insertion\n\n")
         
-        # Check if table exists using MySQL syntax
-        f.write("SET @table_exists = (SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'SystemLog');\n\n")
-        
-        # Process in batches
+        # Process in batches - simpler approach without prepared statements
         total_batches = (len(systemlog) + batch_size - 1) // batch_size
         for batch_num in range(0, len(systemlog), batch_size):
             batch_end = min(batch_num + batch_size, len(systemlog))
             batch_index = batch_num // batch_size + 1
             
-            # Write batch with conditional execution using prepared statement
             f.write(f"-- Batch {batch_index} of {total_batches}\n")
+            f.write("INSERT INTO `SystemLog` (`InvoiceId`, `LogDate`, `LogMessage`)\n")
+            f.write("VALUES\n")
             
             # Build the VALUES list
-            mysql_systemlog_values = []
             for idx in range(batch_num, batch_end):
                 log_entry = systemlog[idx]
                 # Convert from (log_id, invoice_id, 'YYYY/MM/DD', N'message')
@@ -1954,19 +1951,15 @@ def write_mysql_format(f, artists, albums, tracks, customers, invoices, invoice_
                 # Skip log_id (parts[0]) since it's AUTO_INCREMENT
                 invoice_id = parts[1]
                 log_date = parts[2].strip("'")  # Remove quotes
-                log_msg = parts[3].replace("N'", "'").replace("'", "\\\\'")  # Escape for prepared statement
+                log_msg = parts[3].replace("N'", "'").replace("'", "''")  # MySQL uses '' to escape quotes
                 
                 # Build the value with CONCAT for padding
-                mysql_systemlog_values.append(f"    ({invoice_id}, '{log_date}', CONCAT({log_msg}, ' | ', REPEAT('PADDING_', 70000)))")
+                if idx < batch_end - 1:
+                    f.write(f"    ({invoice_id}, '{log_date}', CONCAT({log_msg}, ' | ', REPEAT('PADDING_', 70000))),\n")
+                else:
+                    f.write(f"    ({invoice_id}, '{log_date}', CONCAT({log_msg}, ' | ', REPEAT('PADDING_', 70000)))\n")
             
-            # Write as prepared statement
-            f.write("SET @sql = IF(@table_exists > 0, '\n")
-            f.write("INSERT INTO `SystemLog` (`InvoiceId`, `LogDate`, `LogMessage`) VALUES\n")
-            f.write(",\n".join(mysql_systemlog_values))
-            f.write("', '');\n")
-            f.write("PREPARE stmt FROM @sql;\n")
-            f.write("EXECUTE stmt;\n")
-            f.write("DEALLOCATE PREPARE stmt;\n\n")
+            f.write(";\n\n")
     
     # Commit transaction
     f.write("-- Commit transaction\n")
