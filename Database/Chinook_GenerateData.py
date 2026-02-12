@@ -350,19 +350,26 @@ def generate_customers(start_id=60, count=941):
     
     return customers, customers_dict
 
-def generate_systemlog(start_id=1, count=50000):
+def generate_systemlog(start_id=1, target_mb=500):
     """Generate SystemLog entries for database size inflation
     
     Creates realistic-looking but repetitive log data that inflates database size.
-    Optimized for fast generation while still creating substantial data.
+    Optimized for fast generation with large padding messages to minimize row count.
     
     Args:
         start_id: Starting log ID
-        count: Number of log entries (default 50,000 creates ~5-10MB)
+        target_mb: Target size in megabytes (default 500MB)
     
     Returns:
         List of SQL INSERT values for SystemLog table
     """
+    # Calculate optimal row count for target size
+    # Each row has ~100KB of padding to minimize total row count
+    padding_kb = 100  # Each row gets ~100KB of padding
+    target_bytes = target_mb * 1024 * 1024
+    padding_bytes = padding_kb * 1024
+    count = max(1, int(target_bytes / padding_bytes))
+    
     log_entries = []
     
     # Template messages with variations for realistic but fast generation
@@ -386,6 +393,10 @@ def generate_systemlog(start_id=1, count=50000):
     
     log_levels = ['INFO', 'INFO', 'INFO', 'INFO', 'WARNING', 'DEBUG', 'DEBUG', 'ERROR']  # Weighted toward INFO
     search_terms = ['jazz', 'rock', 'classical', 'pop', 'blues', 'metal', 'country', 'soul']
+    
+    # Create padding string (~1KB that will be repeated)
+    padding_unit = "PADDING_DATA_" * 70  # ~1KB unit
+    padding_message = padding_unit * padding_kb  # Repeat to get ~100KB
     
     # Start date: Jan 1, 2022
     start_date = datetime(2022, 1, 1)
@@ -419,15 +430,18 @@ def generate_systemlog(start_id=1, count=50000):
             random.choice(search_terms)         # {7} - search term
         )
         
-        # Escape single quotes
-        message_escaped = message.replace("'", "''")
+        # Add padding to inflate size
+        message_with_padding = message + " | " + padding_message
         
-        log_entry = f"    ({log_id}, '{timestamp}', N'{level}', N'{message_escaped}')"
+        # Escape single quotes
+        message_escaped = message_with_padding.replace("'", "''")
+        
+        log_entry = f"    ('{timestamp}', N'{level}', N'{message_escaped}')"
         log_entries.append(log_entry)
     
-    return log_entries
+    return log_entries, count
 
-def generate_invoices(start_id=413, count=3588, customer_count=1000, customer_id_start=1):
+def generate_invoices(start_id=413, count=3588, customer_count=1000, customer_id_start=1, customers_dict=None):
     """Generate realistic invoice data for 2022-2026 (Jan 1, 2022 - Jan 19, 2026)
     
     Args:
@@ -435,6 +449,7 @@ def generate_invoices(start_id=413, count=3588, customer_count=1000, customer_id
         count: Number of invoices to generate
         customer_count: Total number of customers (determines max customer ID)
         customer_id_start: Starting customer ID (use 60 if database only has new customers)
+        customers_dict: Dictionary mapping customer_id to address data (for realistic billing)
     """
     invoices = []
     invoice_lines = []
@@ -1031,22 +1046,23 @@ def main():
         
         print()
         print("Generate SystemLog data for database size inflation?")
-        print("  SystemLog contains log entries that inflate database size")
+        print("  SystemLog contains log entries with large padding to inflate database size")
         print("  Useful for demonstrating database subsetting/optimization")
-        print("  50,000 entries ≈ 5-10MB | 500,000 entries ≈ 50-100MB")
+        print("  Each row contains ~100KB of padding for fast insertion with minimal row count")
+        print("  100MB ≈ 1,000 rows | 500MB ≈ 5,000 rows | 1GB ≈ 10,000 rows")
         while True:
             systemlog_choice = input("Generate SystemLog? (y/n, default: n): ").strip().lower()
             if systemlog_choice in ['', 'n', 'no']:
                 generate_systemlog_data = False
-                systemlog_count = 0
+                systemlog_mb = 0
                 break
             elif systemlog_choice in ['y', 'yes']:
                 generate_systemlog_data = True
                 while True:
                     try:
-                        systemlog_input = input("  Enter number of log entries (default 50000): ").strip()
-                        systemlog_count = int(systemlog_input) if systemlog_input else 50000
-                        if systemlog_count < 0:
+                        systemlog_input = input("  Enter target size in MB (default 500): ").strip()
+                        systemlog_mb = int(systemlog_input) if systemlog_input else 500
+                        if systemlog_mb < 0:
                             print("  Please enter a positive number.")
                             continue
                         break
@@ -1072,7 +1088,7 @@ def main():
         new_customers = int(sys.argv[2]) if len(sys.argv) > 2 else 941
         new_invoices = int(sys.argv[3]) if len(sys.argv) > 3 else 3588
         generate_systemlog_data = False
-        systemlog_count = 0
+        systemlog_mb = 0
     
     databases_to_generate = [db_type] if db_type != 'all' else ['mssql', 'oracle', 'postgresql', 'mysql']
     
@@ -1112,13 +1128,12 @@ def main():
     
     # Generate SystemLog if requested
     if generate_systemlog_data:
-        print(f"Generating {systemlog_count:,} SystemLog entries for database size inflation...")
+        print(f"Generating SystemLog entries for ~{systemlog_mb}MB database size inflation...")
         print()
         
-        systemlog = generate_systemlog(start_id=1, count=systemlog_count)
+        systemlog, systemlog_count = generate_systemlog(start_id=1, target_mb=systemlog_mb)
         
-        print(f"✓ Generated {len(systemlog):,} log entries")
-        print(f"  Estimated size: ~{(len(systemlog) * 150) // (1024 * 1024)}-{(len(systemlog) * 200) // (1024 * 1024)}MB")
+        print(f"✓ Generated {systemlog_count:,} log entries (~{systemlog_mb}MB with ~100KB per row)")
         print()
     else:
         systemlog = []
@@ -1456,8 +1471,9 @@ def write_mssql_format(f, artists, albums, tracks, customers, invoices, invoice_
     
     # SystemLog - optional table for database size inflation
     if systemlog and len(systemlog) > 0:
-        f.write("-- Additional system log entries (1+) - Database size inflation\n")
+        f.write("-- SystemLog entries for database size inflation\n")
         f.write("-- Note: Only inserts if SystemLog table exists in the database\n")
+        f.write("-- Each row contains ~100KB of padding for efficient size inflation with minimal row count\n")
         
         # Write batches directly without building full list in memory
         total_batches = (len(systemlog) + batch_size - 1) // batch_size
@@ -1465,20 +1481,19 @@ def write_mssql_format(f, artists, albums, tracks, customers, invoices, invoice_
             batch_end = min(batch_num + batch_size, len(systemlog))
             batch_index = batch_num // batch_size + 1
             
-            # Add progress message every 10 batches
-            if batch_index % 10 == 1 and total_batches >= 10:
+            # Add progress message (every 5 batches for large datasets, every batch for smaller ones)
+            progress_interval = 5 if total_batches >= 20 else 1
+            if batch_index % progress_interval == 1:
                 f.write(f"PRINT '[' + CONVERT(VARCHAR, GETDATE(), 120) + '] Inserting system log entries... batch {batch_index} of {total_batches}';\n")
                 f.write("GO\n")
             
             # Check if table exists before each batch
             f.write("IF EXISTS (SELECT * FROM sys.tables WHERE name = 'SystemLog')\n")
             f.write("BEGIN\n")
-            f.write("SET IDENTITY_INSERT [dbo].[SystemLog] ON;\n")
-            f.write("INSERT INTO [dbo].[SystemLog] ([LogId], [Timestamp], [LogLevel], [Message]) VALUES\n")
+            f.write("INSERT INTO [dbo].[SystemLog] ([Timestamp], [LogLevel], [Message]) VALUES\n")
             
             # Write batch items
             for idx in range(batch_num, batch_end):
-                i = 1 + idx
                 log_entry = systemlog[idx]
                 clean = log_entry.strip()
                 if clean.startswith("("):
@@ -1487,12 +1502,11 @@ def write_mssql_format(f, artists, albums, tracks, customers, invoices, invoice_
                     clean = clean[:-1]
                 
                 if idx < batch_end - 1:
-                    f.write(f"    ({i}, {clean}),\n")
+                    f.write(f"    ({clean}),\n")
                 else:
-                    f.write(f"    ({i}, {clean})\n")
+                    f.write(f"    ({clean})\n")
             
             f.write(";\n")
-            f.write("SET IDENTITY_INSERT [dbo].[SystemLog] OFF;\n")
             f.write("END\n")
             f.write("GO\n\n")
     
