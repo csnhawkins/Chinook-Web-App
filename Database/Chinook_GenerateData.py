@@ -324,8 +324,15 @@ def generate_customers(start_id=60, count=941):
     
     return customers
 
-def generate_invoices(start_id=413, count=3588, customer_count=1000):
-    """Generate realistic invoice data for 2022-2026 (Jan 1, 2022 - Jan 19, 2026)"""
+def generate_invoices(start_id=413, count=3588, customer_count=1000, customer_id_start=1):
+    """Generate realistic invoice data for 2022-2026 (Jan 1, 2022 - Jan 19, 2026)
+    
+    Args:
+        start_id: Starting invoice ID
+        count: Number of invoices to generate
+        customer_count: Total number of customers (determines max customer ID)
+        customer_id_start: Starting customer ID (use 60 if database only has new customers)
+    """
     invoices = []
     invoice_lines = []
     invoice_line_id = 2241  # Starting after existing invoice lines (2240 in base DB)
@@ -340,11 +347,13 @@ def generate_invoices(start_id=413, count=3588, customer_count=1000):
     # Track price (most tracks are 0.99, some are 1.99)
     track_prices = [0.99, 0.99, 0.99, 0.99, 1.99]  # 80% at 0.99, 20% at 1.99
     
+    customer_id_end = customer_id_start + customer_count - 1
+    
     for i in range(count):
         invoice_id = start_id + i
         
-        # Random customer (1-1000)
-        customer_id = random.randint(1, customer_count)
+        # Random customer from the range of customers that actually exist
+        customer_id = random.randint(customer_id_start, customer_id_end)
         
         # Random date between Jan 1, 2022 and Jan 19, 2026
         random_days = random.randint(0, total_days)
@@ -699,7 +708,7 @@ def insert_to_sqlserver(server, database, sql_file, auth_type='windows', usernam
             conn_str = f'DRIVER={{ODBC Driver 17 for SQL Server}};SERVER={server};DATABASE={database};UID={username};PWD={password};'
         
         print(f"Connecting to SQL Server: {server}/{database}...")
-        conn = pyodbc.connect(conn_str)
+        conn = pyodbc.connect(conn_str, autocommit=False)  # Explicitly disable autocommit for transaction control
         cursor = conn.cursor()
         print("✓ Connected successfully\n")
         
@@ -713,8 +722,9 @@ def insert_to_sqlserver(server, database, sql_file, auth_type='windows', usernam
         batches = re.split(r'\n\s*GO\s*\n', sql_content, flags=re.IGNORECASE)
         total_batches = len(batches)
         
-        print(f"Executing {total_batches} batches...\n")
+        print(f"Executing {total_batches} batches in a single transaction...\n")
         
+        batch_count = 0
         for i, batch in enumerate(batches, 1):
             batch = batch.strip()
             if not batch or batch.startswith('--'):
@@ -722,15 +732,20 @@ def insert_to_sqlserver(server, database, sql_file, auth_type='windows', usernam
             
             try:
                 cursor.execute(batch)
-                if i % 10 == 0:
-                    print(f"  Progress: {i}/{total_batches} batches executed")
+                batch_count += 1
+                if batch_count % 10 == 0:
+                    print(f"  Progress: {batch_count} batches executed")
             except pyodbc.Error as e:
                 print(f"\nERROR in batch {i}:")
                 print(f"  {str(e)}")
-                print(f"  Batch preview: {batch[:200]}...")
+                print(f"  Batch preview: {batch[:500]}...")
+                print(f"\n  Full batch content:")
+                print(f"  {batch[:1000]}")
                 conn.rollback()  # Rollback all changes on error
                 raise
         
+        print(f"\n  Total batches executed: {batch_count}")
+        print(f"  Committing transaction...")
         conn.commit()  # Commit all batches as one transaction
         cursor.close()
         conn.close()
@@ -787,6 +802,25 @@ def main():
                 break
             else:
                 print("Invalid choice. Please enter 1-5.")
+        
+        print()
+        
+        # Ask about existing customers
+        print("Does your database already have the original 59 customers?")
+        print("  1. Yes - database has original customers (IDs 1-59)")
+        print("  2. No - database is empty or only has custom data")
+        print()
+        
+        while True:
+            has_original = input("Enter choice (1-2, default: 1): ").strip()
+            if has_original in ['', '1']:
+                customer_id_start = 1
+                break
+            elif has_original == '2':
+                customer_id_start = 60
+                break
+            else:
+                print("Invalid choice. Please enter 1 or 2.")
         
         print()
         
@@ -897,6 +931,7 @@ def main():
         # Default counts for command line mode
         new_customers = int(sys.argv[2]) if len(sys.argv) > 2 else 941
         new_invoices = int(sys.argv[3]) if len(sys.argv) > 3 else 3588
+        customer_id_start = 1  # Assume original data exists in command line mode
     
     databases_to_generate = [db_type] if db_type != 'all' else ['mssql', 'oracle', 'postgresql', 'mysql']
     
@@ -916,7 +951,7 @@ def main():
     print(f"Generating {total_invoices:,} invoices for 2022-2026 (Jan 1, 2022 - Jan 19, 2026)...")
     print()
     
-    invoices, invoice_lines = generate_invoices(start_id=413, count=new_invoices, customer_count=total_customers)
+    invoices, invoice_lines = generate_invoices(start_id=413, count=new_invoices, customer_count=total_customers, customer_id_start=customer_id_start)
     
     print(f"✓ Generated {len(invoices):,} new invoices")
     print(f"✓ Generated {len(invoice_lines):,} new invoice lines")
