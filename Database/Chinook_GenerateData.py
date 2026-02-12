@@ -658,7 +658,31 @@ def generate_artists_albums_tracks(start_artist_id=276, start_album_id=348, star
     
     return artists, albums, tracks
 
-def insert_to_sqlserver(server, database, sql_file):
+def test_sqlserver_connection(server, database, auth_type='windows', username=None, password=None):
+    """Test SQL Server connection before generating files"""
+    try:
+        import pyodbc
+    except ImportError:
+        print("ERROR: pyodbc module not found.")
+        print("Please install it with: pip install pyodbc")
+        return False
+    
+    try:
+        if auth_type == 'windows':
+            conn_str = f'DRIVER={{ODBC Driver 17 for SQL Server}};SERVER={server};DATABASE={database};Trusted_Connection=yes;'
+        else:
+            conn_str = f'DRIVER={{ODBC Driver 17 for SQL Server}};SERVER={server};DATABASE={database};UID={username};PWD={password};'
+        
+        print(f"Testing connection to {server}/{database}...")
+        conn = pyodbc.connect(conn_str)
+        conn.close()
+        print("✓ Connection successful\n")
+        return True
+    except Exception as e:
+        print(f"✗ Connection failed: {str(e)}\n")
+        return False
+
+def insert_to_sqlserver(server, database, sql_file, auth_type='windows', username=None, password=None):
     """Execute SQL file directly into SQL Server database"""
     try:
         import pyodbc
@@ -668,8 +692,11 @@ def insert_to_sqlserver(server, database, sql_file):
         return
     
     try:
-        # Build connection string for Windows Authentication
-        conn_str = f'DRIVER={{ODBC Driver 17 for SQL Server}};SERVER={server};DATABASE={database};Trusted_Connection=yes;'
+        # Build connection string
+        if auth_type == 'windows':
+            conn_str = f'DRIVER={{ODBC Driver 17 for SQL Server}};SERVER={server};DATABASE={database};Trusted_Connection=yes;'
+        else:
+            conn_str = f'DRIVER={{ODBC Driver 17 for SQL Server}};SERVER={server};DATABASE={database};UID={username};PWD={password};'
         
         print(f"Connecting to SQL Server: {server}/{database}...")
         conn = pyodbc.connect(conn_str)
@@ -681,7 +708,9 @@ def insert_to_sqlserver(server, database, sql_file):
             sql_content = f.read()
         
         # Split by GO statements (SQL Server batch separator)
-        batches = sql_content.split('\nGO\n')
+        # Handle GO on its own line with various line endings
+        import re
+        batches = re.split(r'\n\s*GO\s*\n', sql_content, flags=re.IGNORECASE)
         total_batches = len(batches)
         
         print(f"Executing {total_batches} batches...\n")
@@ -780,16 +809,44 @@ def main():
             
             # Get database connection details for direct insert
             if insertion_mode == 'direct' and db_type == 'mssql':
-                print()
-                print("SQL Server connection details:")
-                server_input = input("  Server (default: localhost): ").strip()
-                db_server = server_input if server_input else 'localhost'
-                
-                db_name_input = input("  Database name (default: Chinook): ").strip()
-                db_name = db_name_input if db_name_input else 'Chinook'
-                
-                print("  Using: Windows Authentication")
-                print()
+                while True:
+                    print()
+                    print("SQL Server connection details:")
+                    server_input = input("  Server (default: localhost): ").strip()
+                    db_server = server_input if server_input else 'localhost'
+                    
+                    db_name_input = input("  Database name (default: Chinook_FullRestore): ").strip()
+                    db_name = db_name_input if db_name_input else 'Chinook_FullRestore'
+                    
+                    print()
+                    print("Authentication type:")
+                    print("  1. Windows Authentication")
+                    print("  2. SQL Server Authentication")
+                    while True:
+                        auth_choice = input("  Enter choice (1-2, default: 1): ").strip()
+                        if auth_choice in ['', '1']:
+                            auth_type = 'windows'
+                            username = None
+                            password = None
+                            break
+                        elif auth_choice == '2':
+                            auth_type = 'sql'
+                            username = input("  Username: ").strip()
+                            import getpass
+                            password = getpass.getpass("  Password: ")
+                            break
+                        else:
+                            print("  Invalid choice. Please enter 1 or 2.")
+                    print()
+                    
+                    # Test the connection before proceeding
+                    if test_sqlserver_connection(db_server, db_name, auth_type, username, password):
+                        break
+                    else:
+                        retry = input("Connection failed. Try again? (y/n): ").strip().lower()
+                        if retry not in ['y', 'yes']:
+                            print("Aborting direct database insertion.")
+                            return
         else:
             insertion_mode = 'file'  # Always use file mode for 'all databases'
         
@@ -891,7 +948,7 @@ def main():
                 print(f"  ✓ SQL file generated\n")
                 
                 # Execute the file directly to the database
-                insert_to_sqlserver(db_server, db_name, output_file)
+                insert_to_sqlserver(db_server, db_name, output_file, auth_type, username, password)
             
             # Ask if user wants to insert to another database
             print()
@@ -927,16 +984,43 @@ def main():
             
             # Get connection details for the new database
             if db_type == 'mssql':
-                print()
-                print("SQL Server connection details:")
-                server_input = input("  Server (default: localhost): ").strip()
-                db_server = server_input if server_input else 'localhost'
-                
-                db_name_input = input("  Database name (default: Chinook): ").strip()
-                db_name = db_name_input if db_name_input else 'Chinook'
-                
-                print("  Using: Windows Authentication")
-                print()
+                while True:
+                    print()
+                    print("SQL Server connection details:")
+                    server_input = input("  Server (default: localhost): ").strip()
+                    db_server = server_input if server_input else 'localhost'
+                    
+                    db_name_input = input("  Database name (default: Chinook_FullRestore): ").strip()
+                    db_name = db_name_input if db_name_input else 'Chinook_FullRestore'
+                    
+                    print()
+                    print("Authentication type:")
+                    print("  1. Windows Authentication")
+                    print("  2. SQL Server Authentication")
+                    while True:
+                        auth_choice = input("  Enter choice (1-2, default: 1): ").strip()
+                        if auth_choice in ['', '1']:
+                            auth_type = 'windows'
+                            username = None
+                            password = None
+                            break
+                        elif auth_choice == '2':
+                            auth_type = 'sql'
+                            username = input("  Username: ").strip()
+                            import getpass
+                            password = getpass.getpass("  Password: ")
+                            break
+                        else:
+                            print("  Invalid choice. Please enter 1 or 2.")
+                    print()
+                    
+                    # Test the connection before proceeding
+                    if test_sqlserver_connection(db_server, db_name, auth_type, username, password):
+                        break
+                    else:
+                        retry = input("Connection failed. Try again? (y/n): ").strip().lower()
+                        if retry not in ['y', 'yes']:
+                            break
     else:
         # Generate files for each database
         for db in databases_to_generate:
