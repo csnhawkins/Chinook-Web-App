@@ -350,26 +350,18 @@ def generate_customers(start_id=60, count=941):
     
     return customers, customers_dict
 
-def generate_systemlog(start_id=1, target_mb=500):
+def generate_systemlog(count=5000):
     """Generate SystemLog entries for database size inflation
     
-    Creates realistic-looking but repetitive log data that inflates database size.
-    Optimized for fast generation with large padding messages to minimize row count.
+    Creates realistic-looking log data with large padding to inflate database size.
+    Each row contains ~100KB of padding for efficient size inflation with minimal row count.
     
     Args:
-        start_id: Starting log ID
-        target_mb: Target size in megabytes (default 500MB)
+        count: Number of log entries (each ~100KB, so 5000 rows ≈ 500MB)
     
     Returns:
         List of SQL INSERT values for SystemLog table
     """
-    # Calculate optimal row count for target size
-    # Each row has ~100KB of padding to minimize total row count
-    padding_kb = 100  # Each row gets ~100KB of padding
-    target_bytes = target_mb * 1024 * 1024
-    padding_bytes = padding_kb * 1024
-    count = max(1, int(target_bytes / padding_bytes))
-    
     log_entries = []
     
     # Template messages with variations for realistic but fast generation
@@ -394,7 +386,8 @@ def generate_systemlog(start_id=1, target_mb=500):
     log_levels = ['INFO', 'INFO', 'INFO', 'INFO', 'WARNING', 'DEBUG', 'DEBUG', 'ERROR']  # Weighted toward INFO
     search_terms = ['jazz', 'rock', 'classical', 'pop', 'blues', 'metal', 'country', 'soul']
     
-    # Create padding string (~1KB that will be repeated)
+    # Create padding string (~100KB per row)
+    padding_kb = 100  # Target ~100KB per row
     padding_unit = "PADDING_DATA_" * 70  # ~1KB unit
     padding_message = padding_unit * padding_kb  # Repeat to get ~100KB
     
@@ -404,7 +397,6 @@ def generate_systemlog(start_id=1, target_mb=500):
     total_days = (end_date - start_date).days
     
     for i in range(count):
-        log_id = start_id + i
         
         # Random timestamp
         random_days = random.randint(0, total_days)
@@ -439,7 +431,7 @@ def generate_systemlog(start_id=1, target_mb=500):
         log_entry = f"    ('{timestamp}', N'{level}', N'{message_escaped}')"
         log_entries.append(log_entry)
     
-    return log_entries, count
+    return log_entries
 
 def generate_invoices(start_id=413, count=3588, customer_count=1000, customer_id_start=1, customers_dict=None):
     """Generate realistic invoice data for 2022-2026 (Jan 1, 2022 - Jan 19, 2026)
@@ -1045,32 +1037,20 @@ def main():
                 print("Invalid number. Please try again.")
         
         print()
-        print("Generate SystemLog data for database size inflation?")
-        print("  SystemLog contains log entries with large padding to inflate database size")
-        print("  Useful for demonstrating database subsetting/optimization")
-        print("  Each row contains ~100KB of padding for fast insertion with minimal row count")
+        print("Generate SystemLog entries for database size inflation?")
+        print("  Each row contains ~100KB of padding for efficient size inflation")
         print("  100MB ≈ 1,000 rows | 500MB ≈ 5,000 rows | 1GB ≈ 10,000 rows")
         while True:
-            systemlog_choice = input("Generate SystemLog? (y/n, default: n): ").strip().lower()
-            if systemlog_choice in ['', 'n', 'no']:
-                generate_systemlog_data = False
-                systemlog_mb = 0
+            try:
+                systemlog_input = input("How many SystemLog rows to generate? (0 to skip, default: 0): ").strip()
+                systemlog_count = int(systemlog_input) if systemlog_input else 0
+                if systemlog_count < 0:
+                    print("Please enter a positive number or 0.")
+                    continue
+                generate_systemlog_data = systemlog_count > 0
                 break
-            elif systemlog_choice in ['y', 'yes']:
-                generate_systemlog_data = True
-                while True:
-                    try:
-                        systemlog_input = input("  Enter target size in MB (default 500): ").strip()
-                        systemlog_mb = int(systemlog_input) if systemlog_input else 500
-                        if systemlog_mb < 0:
-                            print("  Please enter a positive number.")
-                            continue
-                        break
-                    except ValueError:
-                        print("  Invalid number. Please try again.")
-                break
-            else:
-                print("Please enter 'y' or 'n'.")
+            except ValueError:
+                print("Invalid number. Please try again.")
         
         print()
     else:
@@ -1088,7 +1068,7 @@ def main():
         new_customers = int(sys.argv[2]) if len(sys.argv) > 2 else 941
         new_invoices = int(sys.argv[3]) if len(sys.argv) > 3 else 3588
         generate_systemlog_data = False
-        systemlog_mb = 0
+        systemlog_count = 0
     
     databases_to_generate = [db_type] if db_type != 'all' else ['mssql', 'oracle', 'postgresql', 'mysql']
     
@@ -1128,12 +1108,13 @@ def main():
     
     # Generate SystemLog if requested
     if generate_systemlog_data:
-        print(f"Generating SystemLog entries for ~{systemlog_mb}MB database size inflation...")
+        estimated_mb = (systemlog_count * 100) // 1024  # ~100KB per row
+        print(f"Generating {systemlog_count:,} SystemLog entries (~{estimated_mb}MB with ~100KB per row)...")
         print()
         
-        systemlog, systemlog_count = generate_systemlog(start_id=1, target_mb=systemlog_mb)
+        systemlog = generate_systemlog(count=systemlog_count)
         
-        print(f"✓ Generated {systemlog_count:,} log entries (~{systemlog_mb}MB with ~100KB per row)")
+        print(f"✓ Generated {len(systemlog):,} log entries (~{estimated_mb}MB)")
         print()
     else:
         systemlog = []
