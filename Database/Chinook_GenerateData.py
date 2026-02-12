@@ -658,8 +658,8 @@ def generate_artists_albums_tracks(start_artist_id=276, start_album_id=348, star
     
     return artists, albums, tracks
 
-def insert_to_sqlserver(server, database, artists, albums, tracks, customers, invoices, invoice_lines):
-    """Insert data directly into SQL Server database"""
+def insert_to_sqlserver(server, database, sql_file):
+    """Execute SQL file directly into SQL Server database"""
     try:
         import pyodbc
     except ImportError:
@@ -676,145 +676,41 @@ def insert_to_sqlserver(server, database, artists, albums, tracks, customers, in
         cursor = conn.cursor()
         print("✓ Connected successfully\n")
         
-        batch_size = 1000
+        print(f"Reading SQL file: {sql_file}")
+        with open(sql_file, 'r', encoding='utf-8') as f:
+            sql_content = f.read()
         
-        # Insert Artists
-        print(f"Inserting {len(artists)} artists...")
-        cursor.execute("SET IDENTITY_INSERT [dbo].[Artist] ON")
-        for i, artist in enumerate(artists, start=276):
-            clean = artist.replace("    (N'", "").replace("')", "")
-            cursor.execute("INSERT INTO [dbo].[Artist] ([ArtistId], [Name]) VALUES (?, ?)", i, clean)
-        cursor.execute("SET IDENTITY_INSERT [dbo].[Artist] OFF")
-        conn.commit()
-        print(f"✓ Inserted {len(artists)} artists\n")
+        # Split by GO statements (SQL Server batch separator)
+        batches = sql_content.split('\nGO\n')
+        total_batches = len(batches)
         
-        # Insert Albums
-        print(f"Inserting {len(albums)} albums...")
-        cursor.execute("SET IDENTITY_INSERT [dbo].[Album] ON")
-        for i, album in enumerate(albums, start=348):
-            clean = album.strip().replace("    (N'", "").rsplit("', ", 1)
-            title = clean[0]
-            artist_id = clean[1].replace(")", "")
-            cursor.execute("INSERT INTO [dbo].[Album] ([AlbumId], [Title], [ArtistId]) VALUES (?, ?, ?)", i, title, int(artist_id))
-        cursor.execute("SET IDENTITY_INSERT [dbo].[Album] OFF")
-        conn.commit()
-        print(f"✓ Inserted {len(albums)} albums\n")
+        print(f"Executing {total_batches} batches...\n")
         
-        # Insert Tracks
-        print(f"Inserting {len(tracks)} tracks...")
-        cursor.execute("SET IDENTITY_INSERT [dbo].[Track] ON")
-        for i, track in enumerate(tracks, start=3504):
-            clean = track.strip().replace("    (N'", "").replace(")", "")
-            parts = clean.split("', ", 1)
-            name = parts[0]
-            rest = parts[1].split(", ")
-            cursor.execute(
-                "INSERT INTO [dbo].[Track] ([TrackId], [Name], [AlbumId], [MediaTypeId], [GenreId], [Composer], [Milliseconds], [Bytes], [UnitPrice]) VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?)",
-                i, name, int(rest[0]), int(rest[1]), int(rest[2]), int(rest[4]), int(rest[5]), float(rest[6])
-            )
-        cursor.execute("SET IDENTITY_INSERT [dbo].[Track] OFF")
-        conn.commit()
-        print(f"✓ Inserted {len(tracks)} tracks\n")
-        
-        # Insert Customers
-        print(f"Inserting {len(customers):,} customers...")
-        cursor.execute("SET IDENTITY_INSERT [dbo].[Customer] ON")
-        count = 0
-        for i, customer in enumerate(customers, start=60):
-            # Parse customer data - this is complex, so we'll do basic parsing
-            clean = customer.strip().replace("    (N'", "").replace("N'", "")
-            # Split carefully to extract fields
-            fields = []
-            in_quote = False
-            current = ""
-            for char in clean:
-                if char == "'" and (not current or current[-1] != "\\"):
-                    in_quote = not in_quote
-                elif char == "," and not in_quote:
-                    fields.append(current.strip().strip("'").replace("(", "").replace(")", ""))
-                    current = ""
-                    continue
-                current += char
-            if current:
-                fields.append(current.strip().strip("'").replace("(", "").replace(")", ""))
+        for i, batch in enumerate(batches, 1):
+            batch = batch.strip()
+            if not batch or batch.startswith('--'):
+                continue
             
-            if len(fields) >= 12:
-                cursor.execute(
-                    "INSERT INTO [dbo].[Customer] ([CustomerId], [FirstName], [LastName], [Company], [Address], [City], [State], [Country], [PostalCode], [Phone], [Fax], [Email], [SupportRepId]) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)",
-                    i, fields[0], fields[1], None if fields[2] == 'NULL' else fields[2], fields[3], fields[4], 
-                    None if fields[5] == 'NULL' else fields[5], fields[6], fields[7], fields[8], fields[10], int(fields[11])
-                )
-                count += 1
-                if count % batch_size == 0:
-                    conn.commit()
-                    print(f"  Progress: {count:,}/{len(customers):,} customers")
-        cursor.execute("SET IDENTITY_INSERT [dbo].[Customer] OFF")
-        conn.commit()
-        print(f"✓ Inserted {len(customers):,} customers\n")
+            try:
+                cursor.execute(batch)
+                if i % 10 == 0:
+                    print(f"  Progress: {i}/{total_batches} batches executed")
+            except pyodbc.Error as e:
+                print(f"\nERROR in batch {i}:")
+                print(f"  {str(e)}")
+                print(f"  Batch preview: {batch[:200]}...")
+                raise
         
-        # Insert Invoices
-        print(f"Inserting {len(invoices):,} invoices...")
-        cursor.execute("SET IDENTITY_INSERT [dbo].[Invoice] ON")
-        count = 0
-        for i, invoice in enumerate(invoices, start=413):
-            clean = invoice.strip().replace("    (", "").replace(")", "").replace("N'", "")
-            fields = []
-            in_quote = False
-            current = ""
-            for char in clean:
-                if char == "'" and (not current or current[-1] != "\\"):
-                    in_quote = not in_quote
-                elif char == "," and not in_quote:
-                    fields.append(current.strip().strip("'"))
-                    current = ""
-                    continue
-                current += char
-            if current:
-                fields.append(current.strip().strip("'"))
-            
-            if len(fields) >= 8:
-                cursor.execute(
-                    "INSERT INTO [dbo].[Invoice] ([InvoiceId], [CustomerId], [InvoiceDate], [BillingAddress], [BillingCity], [BillingState], [BillingCountry], [BillingPostalCode], [Total]) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                    i, int(fields[0]), fields[1], fields[2], fields[3], 
-                    None if fields[4] == 'NULL' else fields[4], fields[5], fields[6], float(fields[7])
-                )
-                count += 1
-                if count % batch_size == 0:
-                    conn.commit()
-                    print(f"  Progress: {count:,}/{len(invoices):,} invoices")
-        cursor.execute("SET IDENTITY_INSERT [dbo].[Invoice] OFF")
         conn.commit()
-        print(f"✓ Inserted {len(invoices):,} invoices\n")
-        
-        # Insert Invoice Lines
-        print(f"Inserting {len(invoice_lines):,} invoice lines...")
-        cursor.execute("SET IDENTITY_INSERT [dbo].[InvoiceLine] ON")
-        count = 0
-        for line in invoice_lines:
-            clean = line.strip().replace("    (", "").replace(")", "")
-            parts = clean.split(", ")
-            if len(parts) >= 5:
-                cursor.execute(
-                    "INSERT INTO [dbo].[InvoiceLine] ([InvoiceLineId], [InvoiceId], [TrackId], [UnitPrice], [Quantity]) VALUES (?, ?, ?, ?, ?)",
-                    int(parts[0]), int(parts[1]), int(parts[2]), float(parts[3]), int(parts[4])
-                )
-                count += 1
-                if count % batch_size == 0:
-                    conn.commit()
-                    print(f"  Progress: {count:,}/{len(invoice_lines):,} invoice lines")
-        cursor.execute("SET IDENTITY_INSERT [dbo].[InvoiceLine] OFF")
-        conn.commit()
-        print(f"✓ Inserted {len(invoice_lines):,} invoice lines\n")
-        
         cursor.close()
         conn.close()
         
-        print("=" * 80)
+        print("\n" + "=" * 80)
         print("SUCCESS: All data inserted directly into SQL Server database!")
         print("=" * 80)
         
     except pyodbc.Error as e:
-        print(f"\nERROR: Database connection or insertion failed:")
+        print(f"\nERROR: Database connection or execution failed:")
         print(f"  {str(e)}")
         print("\nPlease check:")
         print("  - SQL Server is running")
@@ -980,9 +876,67 @@ def main():
     print()
     
     # Insert or generate files based on mode
-    if insertion_mode == 'direct' and db_type == 'mssql':
-        # Direct database insertion
-        insert_to_sqlserver(db_server, db_name, artists, albums, tracks, customers, invoices, invoice_lines)
+    if insertion_mode == 'direct':
+        # Direct database insertion - can insert to multiple databases with same data
+        # Strategy: Generate SQL file first, then execute it
+        while True:
+            if db_type == 'mssql':
+                # Generate the SQL file
+                db_dirs = {'mssql': 'MSSQL'}
+                output_file = f'{db_dirs[db_type]}/large_dataset_inserts_{db_type}.sql'
+                
+                print(f"Generating SQL file: {output_file}...")
+                with open(output_file, 'w', encoding='utf-8') as f:
+                    write_mssql_format(f, artists, albums, tracks, customers, invoices, invoice_lines)
+                print(f"  ✓ SQL file generated\n")
+                
+                # Execute the file directly to the database
+                insert_to_sqlserver(db_server, db_name, output_file)
+            
+            # Ask if user wants to insert to another database
+            print()
+            while True:
+                another = input("Insert same data to another database? (y/n): ").strip().lower()
+                if another in ['y', 'yes', 'n', 'no']:
+                    break
+                print("Please enter 'y' or 'n'")
+            
+            if another in ['n', 'no']:
+                break
+            
+            # Prompt for next database
+            print()
+            print("Select target database:")
+            print("  1. SQL Server")
+            print("  2. Oracle (not yet implemented)")
+            print("  3. PostgreSQL (not yet implemented)")
+            print("  4. MySQL (not yet implemented)")
+            print()
+            
+            while True:
+                db_choice = input("Enter choice (1-4): ").strip()
+                if db_choice == '1':
+                    db_type = 'mssql'
+                    break
+                elif db_choice in ['2', '3', '4']:
+                    print("Direct insertion for this database type is not yet implemented.")
+                    print("Use 'Generate SQL file' option instead, then execute the file manually.")
+                    continue
+                else:
+                    print("Invalid choice. Please enter 1-4.")
+            
+            # Get connection details for the new database
+            if db_type == 'mssql':
+                print()
+                print("SQL Server connection details:")
+                server_input = input("  Server (default: localhost): ").strip()
+                db_server = server_input if server_input else 'localhost'
+                
+                db_name_input = input("  Database name (default: Chinook): ").strip()
+                db_name = db_name_input if db_name_input else 'Chinook'
+                
+                print("  Using: Windows Authentication")
+                print()
     else:
         # Generate files for each database
         for db in databases_to_generate:
@@ -1011,15 +965,19 @@ def main():
     
     print()
     print("=" * 80)
-    print("Summary:")
+    print("Data Generation Summary:")
     print("  - 80 real artists from Billboard/mainstream charts")
-    print("  - 160 real albums with clean content")
+    print("  - 160 real albums with clean content")  
     print("  - 439 real tracks (no explicit content)")
     print(f"  - {new_customers:,} realistic customers from diverse cultures")
     print("  - Accurate city/country/state combinations")
     print(f"  - {new_invoices:,} invoices (Jan 1, 2022 - Jan 19, 2026)")
+    print(f"  - {len(invoice_lines):,} invoice line items")
     print("  - Realistic invoice amounts ($0.99 - $50.00)")
-    print("  - Generated for: " + ", ".join([d.upper() for d in databases_to_generate]))
+    if insertion_mode == 'file':
+        print("  - SQL files generated for: " + ", ".join([d.upper() for d in databases_to_generate]))
+    else:
+        print("  - SQL file generated and executed directly to database")
     print("=" * 80)
 
 def write_mssql_format(f, artists, albums, tracks, customers, invoices, invoice_lines):
