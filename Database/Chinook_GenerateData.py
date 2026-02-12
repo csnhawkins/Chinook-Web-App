@@ -390,7 +390,7 @@ def generate_systemlog(count=5000):
     invoice_id_end = invoice_id_start + 100000  # Assume up to 100K invoices
     
     for i in range(count):
-        log_id = i + 1
+        log_id = 1000 + i  # Start from 1000 to avoid conflicts with existing logs
         
         # Random invoice ID from the range
         invoice_id = random.randint(invoice_id_start, invoice_id_end)
