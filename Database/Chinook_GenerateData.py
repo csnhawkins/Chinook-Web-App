@@ -359,7 +359,7 @@ def generate_systemlog(count=5000, invoice_count=3588):
     Note: Matches actual SystemLog schema (LogId, InvoiceId, LogDate, LogMessage)
     
     Args:
-        count: Number of log entries (each ~100KB after SQL padding, so 5000 rows ≈ 500MB)
+        count: Number of log entries (each ~50KB after SQL padding, so 10000 rows ≈ 500MB)
         invoice_count: Number of invoices generated (to ensure valid FK references)
     
     Returns:
@@ -912,7 +912,7 @@ def main():
         # Default values
         new_customers = 941
         new_invoices = 3588
-        systemlog_count = 1000  # Default to 1000 rows for quick mode
+        systemlog_count = 10000  # Default to 10000 rows (~500MB) for quick mode
         
         # Parse command-line arguments for custom values
         for i, arg in enumerate(sys.argv):
@@ -937,7 +937,7 @@ def main():
         print(f"Customers: {new_customers:,}")
         print(f"Invoices: {new_invoices:,}")
         if generate_systemlog_data:
-            estimated_mb = (systemlog_count * 100) // 1000
+            estimated_mb = (systemlog_count * 50) // 1000  # ~50KB per row
             print(f"SystemLog: {systemlog_count:,} rows (~{estimated_mb}MB)")
         else:
             print(f"SystemLog: Skipped")
@@ -1078,8 +1078,8 @@ def main():
         
         print()
         print("Generate SystemLog entries for database size inflation?")
-        print("  SQL Server generates ~100KB padding per row during insertion (fast & memory-efficient)")
-        print("  100MB ≈ 1,000 rows | 500MB ≈ 5,000 rows | 1GB ≈ 10,000 rows")
+        print("  SQL Server generates ~50KB padding per row during insertion (fast & memory-efficient)")
+        print("  100MB ≈ 2,000 rows | 500MB ≈ 10,000 rows | 1GB ≈ 20,000 rows")
         while True:
             try:
                 systemlog_input = input("How many SystemLog rows to generate? (0 to skip, default: 0): ").strip()
@@ -1148,13 +1148,13 @@ def main():
     
     # Generate SystemLog if requested
     if generate_systemlog_data:
-        estimated_mb = (systemlog_count * 100) // 1000  # ~100KB per row after SQL padding
+        estimated_mb = (systemlog_count * 50) // 1000  # ~50KB per row
         print(f"Generating {systemlog_count:,} SystemLog entries (~{estimated_mb}MB after SQL padding)...")
         print()
         
         systemlog = generate_systemlog(count=systemlog_count, invoice_count=new_invoices)
         
-        print(f"✓ Generated {len(systemlog):,} log entries (SQL Server will add ~100KB padding per row)")
+        print(f"✓ Generated {len(systemlog):,} log entries (SQL Server will add ~50KB padding per row)")
         print()
     else:
         systemlog = []
@@ -1494,7 +1494,7 @@ def write_mssql_format(f, artists, albums, tracks, customers, invoices, invoice_
     if systemlog and len(systemlog) > 0:
         f.write("-- SystemLog entries for database size inflation\n")
         f.write("-- Note: Only inserts if SystemLog table exists in the database\n")
-        f.write("-- SQL Server generates ~100KB padding per row using REPLICATE() for fast insertion\n")
+        f.write("-- SQL Server generates ~50KB padding per row using REPLICATE() for fast insertion\n")
         
         # Write batches directly without building full list in memory
         total_batches = (len(systemlog) + batch_size - 1) // batch_size
@@ -1512,7 +1512,7 @@ def write_mssql_format(f, artists, albums, tracks, customers, invoices, invoice_
             f.write("IF EXISTS (SELECT * FROM sys.tables WHERE name = 'SystemLog')\n")
             f.write("BEGIN\n")
             f.write("INSERT INTO [dbo].[SystemLog] ([LogId], [InvoiceId], [LogDate], [LogMessage])\n")
-            f.write("SELECT LogId, InvoiceId, LogDate, LogMessage + ' | ' + REPLICATE('PADDING_', 10000)\n")
+            f.write("SELECT LogId, InvoiceId, LogDate, LogMessage + ' | ' + REPLICATE('PADDING_', 70000)\n")
             f.write("FROM (VALUES\n")
             
             # Write batch items
