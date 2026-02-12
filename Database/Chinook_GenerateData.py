@@ -731,29 +731,38 @@ def insert_to_sqlserver(server, database, sql_file, auth_type='windows', usernam
         print(f"Executing SQL file via sqlcmd: {server}/{database}...")
         print(f"  File: {sql_file}\n")
         
-        # Execute sqlcmd
-        result = subprocess.run(
+        # Execute sqlcmd with real-time output
+        process = subprocess.Popen(
             cmd,
-            capture_output=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             text=True,
             encoding='utf-8',
-            errors='replace'
+            errors='replace',
+            bufsize=1,
+            universal_newlines=True
         )
         
+        # Stream output in real-time
+        stdout_lines = []
+        stderr_lines = []
+        
+        # Read stdout
+        for line in process.stdout:
+            print(line.rstrip())
+            stdout_lines.append(line)
+        
+        # Wait for completion and get stderr
+        process.wait()
+        stderr_output = process.stderr.read()
+        
         # Check for errors
-        if result.returncode != 0:
+        if process.returncode != 0:
             print("\n" + "=" * 80)
             print("ERROR: SQL execution failed")
             print("=" * 80)
-            print(result.stderr)
-            if result.stdout:
-                print("\nOutput:")
-                print(result.stdout)
+            print(stderr_output)
             return False
-        
-        # Show output (progress messages, row counts, etc.)
-        if result.stdout:
-            print(result.stdout)
         
         print("\n" + "=" * 80)
         print("SUCCESS: All data inserted directly into SQL Server database!")
@@ -1094,8 +1103,13 @@ def write_mssql_format(f, artists, albums, tracks, customers, invoices, invoice_
     f.write("BEGIN TRANSACTION;\n")
     f.write("GO\n\n")
     
+    f.write("PRINT 'Starting data insertion...';\n")
+    f.write("GO\n\n")
+    
     # Artists - has IDENTITY, need to specify IDs explicitly
     f.write("-- Additional artists (276-355) - Real chart artists\n")
+    f.write("PRINT 'Inserting artists...';\n")
+    f.write("GO\n")
     f.write("SET IDENTITY_INSERT [dbo].[Artist] ON;\n")
     f.write("INSERT INTO [dbo].[Artist] ([ArtistId], [Name]) VALUES\n")
     # Parse and add explicit ArtistIds
@@ -1116,6 +1130,8 @@ def write_mssql_format(f, artists, albums, tracks, customers, invoices, invoice_
     
     # Albums - has IDENTITY, need to specify IDs explicitly with batching
     f.write("-- Additional albums (348-507) - Real chart albums\n")
+    f.write("PRINT 'Inserting albums...';\n")
+    f.write("GO\n")
     
     # Batch the inserts
     album_count = len(albums)
@@ -1149,6 +1165,8 @@ def write_mssql_format(f, artists, albums, tracks, customers, invoices, invoice_
     
     # Tracks - has IDENTITY, need to specify IDs explicitly with batching
     f.write("-- Additional tracks (3504-3942) - Real chart tracks\n")
+    f.write("PRINT 'Inserting tracks...';\n")
+    f.write("GO\n")
     
     # Batch the inserts
     track_count = len(tracks)
@@ -1185,8 +1203,15 @@ def write_mssql_format(f, artists, albums, tracks, customers, invoices, invoice_
     f.write("-- Additional customers (60-1000+)\n")
     
     # Write batches directly without building full list in memory
+    total_batches = (len(customers) + batch_size - 1) // batch_size
     for batch_num in range(0, len(customers), batch_size):
         batch_end = min(batch_num + batch_size, len(customers))
+        batch_index = batch_num // batch_size + 1
+        
+        # Add progress message every 10 batches
+        if batch_index % 10 == 1 and total_batches >= 10:
+            f.write(f"PRINT 'Inserting customers... batch {batch_index} of {total_batches}';\n")
+            f.write("GO\n")
         
         f.write("SET IDENTITY_INSERT [dbo].[Customer] ON;\n")
         f.write("INSERT INTO [dbo].[Customer] ([CustomerId], [FirstName], [LastName], [Company], [Address], [City], [State], [Country], [PostalCode], [Phone], [Fax], [Email], [SupportRepId]) VALUES\n")
@@ -1214,8 +1239,15 @@ def write_mssql_format(f, artists, albums, tracks, customers, invoices, invoice_
     f.write("-- Additional invoices (413-4000+) - 2022-2026\n")
     
     # Write batches directly without building full list in memory
+    total_batches = (len(invoices) + batch_size - 1) // batch_size
     for batch_num in range(0, len(invoices), batch_size):
         batch_end = min(batch_num + batch_size, len(invoices))
+        batch_index = batch_num // batch_size + 1
+        
+        # Add progress message every 10 batches
+        if batch_index % 10 == 1 and total_batches >= 10:
+            f.write(f"PRINT 'Inserting invoices... batch {batch_index} of {total_batches}';\n")
+            f.write("GO\n")
         
         f.write("SET IDENTITY_INSERT [dbo].[Invoice] ON;\n")
         f.write("INSERT INTO [dbo].[Invoice] ([InvoiceId], [CustomerId], [InvoiceDate], [BillingAddress], [BillingCity], [BillingState], [BillingCountry], [BillingPostalCode], [Total]) VALUES\n")
@@ -1243,9 +1275,16 @@ def write_mssql_format(f, artists, albums, tracks, customers, invoices, invoice_
     f.write("-- Additional invoice lines (2241+) - Links invoices to tracks\n")
     
     # Write batches directly without building full list in memory
+    total_batches = (len(invoice_lines) + batch_size - 1) // batch_size
     for batch_num in range(0, len(invoice_lines), batch_size):
         batch_end = min(batch_num + batch_size, len(invoice_lines))
         batch = invoice_lines[batch_num:batch_end]
+        batch_index = batch_num // batch_size + 1
+        
+        # Add progress message every 10 batches
+        if batch_index % 10 == 1 and total_batches >= 10:
+            f.write(f"PRINT 'Inserting invoice lines... batch {batch_index} of {total_batches}';\n")
+            f.write("GO\n")
         
         f.write("SET IDENTITY_INSERT [dbo].[InvoiceLine] ON;\n")
         f.write("INSERT INTO [dbo].[InvoiceLine] ([InvoiceLineId], [InvoiceId], [TrackId], [UnitPrice], [Quantity]) VALUES\n")
@@ -1256,7 +1295,11 @@ def write_mssql_format(f, artists, albums, tracks, customers, invoices, invoice_
     
     # Commit transaction
     f.write("-- Commit all changes\n")
+    f.write("PRINT 'Committing transaction...';\n")
+    f.write("GO\n")
     f.write("COMMIT TRANSACTION;\n")
+    f.write("GO\n")
+    f.write("PRINT 'Data insertion completed successfully!';\n")
     f.write("GO\n")
 
 def write_oracle_format(f, artists, albums, tracks, customers, invoices, invoice_lines):
