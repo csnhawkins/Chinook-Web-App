@@ -165,7 +165,7 @@ CREATE TABLE `SystemLog` (
     `LogId` INT AUTO_INCREMENT NOT NULL,
     `InvoiceId` INT NOT NULL,
     `LogDate` DATETIME NOT NULL,
-    `LogMessage` TEXT,
+    `LogMessage` LONGTEXT,
     CONSTRAINT `PK_SystemLog` PRIMARY KEY (`LogId`),
     CONSTRAINT `fk_SystemLog_Invoice` FOREIGN KEY (`InvoiceId`)
         REFERENCES `Invoice`(`InvoiceId`)
