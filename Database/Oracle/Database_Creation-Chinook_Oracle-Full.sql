@@ -199,7 +199,7 @@ CREATE TABLE SystemLog (
     LogId NUMBER NOT NULL,
     InvoiceId NUMBER NOT NULL, -- logically references Invoice
     LogDate DATE NOT NULL,
-    LogMessage VARCHAR2(4000),
+    LogMessage CLOB,
     CONSTRAINT PK_SystemLog PRIMARY KEY (LogId)
 );
 

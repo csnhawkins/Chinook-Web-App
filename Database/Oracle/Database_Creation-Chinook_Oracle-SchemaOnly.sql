@@ -194,7 +194,7 @@ CREATE TABLE SystemLog (
     LogId NUMBER PRIMARY KEY,
     InvoiceId NUMBER NOT NULL, -- logically references Invoice
     LogDate DATE NOT NULL,
-    LogMessage VARCHAR2(4000)
+    LogMessage CLOB
 );
 
 CREATE SEQUENCE SystemLog_Seq START WITH 1 INCREMENT BY 1;

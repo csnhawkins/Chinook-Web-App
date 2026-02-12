@@ -1680,6 +1680,62 @@ def write_oracle_format(f, artists, albums, tracks, customers, invoices, invoice
         f.write("SELECT 1 FROM dual;\n")
     f.write("\n")
     
+    # SystemLog - optional table for database size inflation
+    if systemlog and len(systemlog) > 0:
+        f.write("-- SystemLog entries for database size inflation\n")
+        f.write("-- Note: Only inserts if SystemLog table exists in the database\n")
+        f.write("-- Oracle generates ~7.8KB padding per row using RPAD() for fast insertion\n")
+        f.write("\n")
+        
+        # Check if table exists
+        f.write("DECLARE\n")
+        f.write("  v_table_exists NUMBER;\n")
+        f.write("BEGIN\n")
+        f.write("  SELECT COUNT(*) INTO v_table_exists FROM user_tables WHERE table_name = 'SYSTEMLOG';\n")
+        f.write("  \n")
+        f.write("  IF v_table_exists > 0 THEN\n")
+        
+        # Process in batches (Oracle INSERT ALL has 1000 row limit, use 500 to be safe)
+        total_batches = (len(systemlog) + batch_size - 1) // batch_size
+        for batch_num in range(0, len(systemlog), batch_size):
+            batch_end = min(batch_num + batch_size, len(systemlog))
+            batch_index = batch_num // batch_size + 1
+            
+            # Progress tracking
+            progress_interval = 5 if total_batches >= 20 else 1
+            if batch_index % progress_interval == 1:
+                f.write(f"    DBMS_OUTPUT.PUT_LINE('Inserting system log entries... batch {batch_index} of {total_batches}');\n")
+            
+            # Write batch using INSERT ALL
+            f.write("    INSERT ALL\n")
+            for idx in range(batch_num, batch_end):
+                log_entry = systemlog[idx]
+                # Convert from (log_id, invoice_id, 'YYYY/MM/DD', N'message')
+                log_clean = log_entry.strip()
+                if log_clean.startswith("("):
+                    log_clean = log_clean[1:]
+                if log_clean.endswith(")"):
+                    log_clean = log_clean[:-1]
+                
+                # Parse the fields
+                parts = log_clean.split(", ", 3)
+                # Skip log_id (parts[0]) - Oracle trigger will auto-generate
+                invoice_id = parts[1]
+                log_date = parts[2].strip("'")
+                log_msg = parts[3].replace("N'", "'").replace("''", "''''")
+                
+                # Oracle: Use RPAD to add padding (RPAD pads to specified length)
+                # RPAD(string, length, pad_string) - we want ~7.8KB so use RPAD with REPEAT-like approach
+                f.write(f"      INTO SystemLog (InvoiceId, LogDate, LogMessage) VALUES ({invoice_id}, TO_DATE('{log_date}', 'YYYY/MM/DD'), {log_msg} || ' | ' || RPAD('PADDING_', 70000, 'PADDING_'))\n")
+            
+            f.write("    SELECT 1 FROM dual;\n")
+            f.write("\n")
+        
+        f.write("  END IF;\n")
+        f.write("END;\n")
+        f.write("/\n")
+        f.write("\n")
+    
     # Commit transaction
     f.write("-- Commit transaction\n")
     f.write("COMMIT;\n")
@@ -1862,6 +1918,57 @@ def write_mysql_format(f, artists, albums, tracks, customers, invoices, invoice_
         f.write("INSERT INTO `InvoiceLine` (`InvoiceLineId`, `InvoiceId`, `TrackId`, `UnitPrice`, `Quantity`) VALUES\n")
         f.write(",\n".join(batch))
         f.write(";\n\n")
+    
+    # SystemLog - optional table for database size inflation
+    if systemlog and len(systemlog) > 0:
+        f.write("-- SystemLog entries for database size inflation\n")
+        f.write("-- Note: Only inserts if SystemLog table exists in the database\n")
+        f.write("-- MySQL generates ~7.8KB padding per row using REPEAT() for fast insertion\n\n")
+        
+        # Check if table exists using MySQL syntax
+        f.write("SET @table_exists = (SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'SystemLog');\n\n")
+        
+        # Process in batches
+        total_batches = (len(systemlog) + batch_size - 1) // batch_size
+        for batch_num in range(0, len(systemlog), batch_size):
+            batch_end = min(batch_num + batch_size, len(systemlog))
+            batch_index = batch_num // batch_size + 1
+            
+            # Write batch with conditional execution
+            f.write(f"-- Batch {batch_index} of {total_batches}\n")
+            f.write("SET @sql = IF(@table_exists > 0, '\n")
+            f.write("INSERT INTO `SystemLog` (`InvoiceId`, `LogDate`, `LogMessage`)\n")
+            f.write("SELECT InvoiceId, LogDate, CONCAT(LogMessage, \" | \", REPEAT(\"PADDING_\", 70000))\n")
+            f.write("FROM (VALUES\n")
+            
+            # Write batch items
+            for idx in range(batch_num, batch_end):
+                log_entry = systemlog[idx]
+                # Convert from (log_id, invoice_id, 'YYYY/MM/DD', N'message')
+                # MySQL doesn't use explicit log_id (AUTO_INCREMENT handles it)
+                log_clean = log_entry.strip()
+                if log_clean.startswith("("):
+                    log_clean = log_clean[1:]
+                if log_clean.endswith(")"):
+                    log_clean = log_clean[:-1]
+                
+                # Parse the fields
+                parts = log_clean.split(", ", 3)
+                # Skip log_id (parts[0]) since it's AUTO_INCREMENT
+                invoice_id = parts[1]
+                log_date = parts[2]
+                log_msg = parts[3].replace("N'", "'")
+                
+                # MySQL uses ROW() for multi-column values
+                if idx < batch_end - 1:
+                    f.write(f"    ROW({invoice_id}, {log_date}, {log_msg}),\n")
+                else:
+                    f.write(f"    ROW({invoice_id}, {log_date}, {log_msg})\n")
+            
+            f.write(") AS log_data(InvoiceId, LogDate, LogMessage)', '');\n")
+            f.write("PREPARE stmt FROM @sql;\n")
+            f.write("EXECUTE stmt;\n")
+            f.write("DEALLOCATE PREPARE stmt;\n\n")
     
     # Commit transaction
     f.write("-- Commit transaction\n")

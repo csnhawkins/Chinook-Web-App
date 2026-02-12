@@ -162,10 +162,10 @@ CREATE TABLE `AppConfig` (
  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE `SystemLog` (
-    `LogId` INT NOT NULL,
+    `LogId` INT AUTO_INCREMENT NOT NULL,
     `InvoiceId` INT NOT NULL,
-    `LogDate` DATE NOT NULL,
-    `LogMessage` VARCHAR(1000),
+    `LogDate` DATETIME NOT NULL,
+    `LogMessage` TEXT,
     CONSTRAINT `PK_SystemLog` PRIMARY KEY (`LogId`),
     CONSTRAINT `fk_SystemLog_Invoice` FOREIGN KEY (`InvoiceId`)
         REFERENCES `Invoice`(`InvoiceId`)
