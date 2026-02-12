@@ -1866,6 +1866,7 @@ def write_postgresql_format(f, artists, albums, tracks, customers, invoices, inv
 
 def write_mysql_format(f, artists, albums, tracks, customers, invoices, invoice_lines, systemlog):
     """Write data in MySQL format (backticks, single quotes) with batching"""
+    import re
     batch_size = 1000
     
     # Add transaction for better performance
@@ -1903,7 +1904,14 @@ def write_mysql_format(f, artists, albums, tracks, customers, invoices, invoice_
     
     # Invoices - with batching for large datasets
     f.write("-- Additional invoices (413-4000+) - 2022-2026\n")
-    mysql_invoices = [i.replace("    (", "    (").replace("N'", "'") for i in invoices]
+    mysql_invoices = []
+    for inv in invoices:
+        # Convert YYYY/MM/DD to YYYY-MM-DD for MySQL
+        inv_converted = inv.replace("    (", "    (").replace("N'", "'")
+        # Replace date format
+        inv_converted = re.sub(r"(\d{4})/(\d{2})/(\d{2})", r"\1-\2-\3", inv_converted)
+        mysql_invoices.append(inv_converted)
+    
     for batch_num in range(0, len(mysql_invoices), batch_size):
         batch = mysql_invoices[batch_num:batch_num+batch_size]
         f.write("INSERT INTO `Invoice` (`CustomerId`, `InvoiceDate`, `BillingAddress`, `BillingCity`, `BillingState`, `BillingCountry`, `BillingPostalCode`, `Total`) VALUES\n")
@@ -1951,6 +1959,8 @@ def write_mysql_format(f, artists, albums, tracks, customers, invoices, invoice_
                 # Skip log_id (parts[0]) since it's AUTO_INCREMENT
                 invoice_id = parts[1]
                 log_date = parts[2].strip("'")  # Remove quotes
+                # Convert YYYY/MM/DD to YYYY-MM-DD for MySQL
+                log_date = log_date.replace("/", "-")
                 log_msg = parts[3].replace("N'", "'")  # Just replace N' with ' - quotes are already properly escaped
                 
                 # Build the value with CONCAT for padding
