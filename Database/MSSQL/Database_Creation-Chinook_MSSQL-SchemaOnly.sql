@@ -146,7 +146,7 @@ CREATE TABLE SystemLog (
     LogId INT NOT NULL,
     InvoiceId INT NOT NULL,
     LogDate DATETIME NOT NULL,
-    LogMessage NVARCHAR(1000),
+    LogMessage NVARCHAR(MAX),
     CONSTRAINT [PK_SystemLog] PRIMARY KEY CLUSTERED ([LogId]),
     CONSTRAINT FK_SystemLog_Invoice FOREIGN KEY (InvoiceId)
         REFERENCES Invoice (InvoiceId)
