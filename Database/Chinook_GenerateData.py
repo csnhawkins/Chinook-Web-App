@@ -1094,111 +1094,143 @@ def write_mssql_format(f, artists, albums, tracks, customers, invoices, invoice_
     
     # Albums - has IDENTITY, need to specify IDs explicitly with batching
     f.write("-- Additional albums (348-507) - Real chart albums\n")
-    f.write("SET IDENTITY_INSERT [dbo].[Album] ON;\n")
-    # Parse and add explicit AlbumIds
-    album_lines = []
-    for i, album in enumerate(albums, start=348):
-        clean = album.strip()
-        if clean.startswith("("):
-            clean = clean[1:]
-        if clean.endswith(")"):
-            clean = clean[:-1]
-        parts = clean.rsplit(", ", 1)
-        title_part = parts[0]
-        artist_id = parts[1]
-        album_lines.append(f"    ({i}, {title_part}, {artist_id})")
     
     # Batch the inserts
-    for batch_num in range(0, len(album_lines), batch_size):
-        batch = album_lines[batch_num:batch_num+batch_size]
+    album_count = len(albums)
+    for batch_num in range(0, album_count, batch_size):
+        batch_end = min(batch_num + batch_size, album_count)
+        
+        f.write("SET IDENTITY_INSERT [dbo].[Album] ON;\n")
         f.write("INSERT INTO [dbo].[Album] ([AlbumId], [Title], [ArtistId]) VALUES\n")
-        f.write(",\n".join(batch))
+        
+        # Write batch items
+        for idx in range(batch_num, batch_end):
+            i = 348 + idx
+            album = albums[idx]
+            clean = album.strip()
+            if clean.startswith("("):
+                clean = clean[1:]
+            if clean.endswith(")"):
+                clean = clean[:-1]
+            parts = clean.rsplit(", ", 1)
+            title_part = parts[0]
+            artist_id = parts[1]
+            
+            if idx < batch_end - 1:
+                f.write(f"    ({i}, {title_part}, {artist_id}),\n")
+            else:
+                f.write(f"    ({i}, {title_part}, {artist_id})\n")
+        
         f.write(";\n")
+        f.write("SET IDENTITY_INSERT [dbo].[Album] OFF;\n")
         f.write("GO\n\n")
-    f.write("SET IDENTITY_INSERT [dbo].[Album] OFF;\n")
-    f.write("GO\n\n")
     
     # Tracks - has IDENTITY, need to specify IDs explicitly with batching
     f.write("-- Additional tracks (3504-3942) - Real chart tracks\n")
-    f.write("SET IDENTITY_INSERT [dbo].[Track] ON;\n")
-    track_lines = []
-    for i, track in enumerate(tracks, start=3504):
-        clean = track.strip()
-        if clean.startswith("("):
-            clean = clean[1:]
-        if clean.endswith(")"):
-            clean = clean[:-1]
-        quote_end = clean.find("', ")
-        if quote_end > 0:
-            name_part = clean[:quote_end+1]
-            rest = clean[quote_end+2:]
-            track_lines.append(f"    ({i}, {name_part}, {rest})")
     
     # Batch the inserts
-    for batch_num in range(0, len(track_lines), batch_size):
-        batch = track_lines[batch_num:batch_num+batch_size]
+    track_count = len(tracks)
+    for batch_num in range(0, track_count, batch_size):
+        batch_end = min(batch_num + batch_size, track_count)
+        
+        f.write("SET IDENTITY_INSERT [dbo].[Track] ON;\n")
         f.write("INSERT INTO [dbo].[Track] ([TrackId], [Name], [AlbumId], [MediaTypeId], [GenreId], [Composer], [Milliseconds], [Bytes], [UnitPrice]) VALUES\n")
-        f.write(",\n".join(batch))
+        
+        # Write batch items
+        for idx in range(batch_num, batch_end):
+            i = 3504 + idx
+            track = tracks[idx]
+            clean = track.strip()
+            if clean.startswith("("):
+                clean = clean[1:]
+            if clean.endswith(")"):
+                clean = clean[:-1]
+            quote_end = clean.find("', ")
+            if quote_end > 0:
+                name_part = clean[:quote_end+1]
+                rest = clean[quote_end+2:]
+                
+                if idx < batch_end - 1:
+                    f.write(f"    ({i}, {name_part}, {rest}),\n")
+                else:
+                    f.write(f"    ({i}, {name_part}, {rest})\n")
+        
         f.write(";\n")
+        f.write("SET IDENTITY_INSERT [dbo].[Track] OFF;\n")
         f.write("GO\n\n")
-    f.write("SET IDENTITY_INSERT [dbo].[Track] OFF;\n")
-    f.write("GO\n\n")
     
     # Customers - has IDENTITY, need to specify IDs explicitly with batching
     f.write("-- Additional customers (60-1000+)\n")
-    f.write("SET IDENTITY_INSERT [dbo].[Customer] ON;\n")
-    customer_lines = []
-    for i, customer in enumerate(customers, start=60):
-        clean = customer.strip()
-        if clean.startswith("("):
-            clean = clean[1:]
-        if clean.endswith(")"):
-            clean = clean[:-1]
-        customer_lines.append(f"    ({i}, {clean})")
     
-    # Batch the inserts
-    for batch_num in range(0, len(customer_lines), batch_size):
-        batch = customer_lines[batch_num:batch_num+batch_size]
+    # Write batches directly without building full list in memory
+    for batch_num in range(0, len(customers), batch_size):
+        batch_end = min(batch_num + batch_size, len(customers))
+        
+        f.write("SET IDENTITY_INSERT [dbo].[Customer] ON;\n")
         f.write("INSERT INTO [dbo].[Customer] ([CustomerId], [FirstName], [LastName], [Company], [Address], [City], [State], [Country], [PostalCode], [Phone], [Fax], [Email], [SupportRepId]) VALUES\n")
-        f.write(",\n".join(batch))
+        
+        # Write batch items
+        for idx in range(batch_num, batch_end):
+            i = 60 + idx
+            customer = customers[idx]
+            clean = customer.strip()
+            if clean.startswith("("):
+                clean = clean[1:]
+            if clean.endswith(")"):
+                clean = clean[:-1]
+            
+            if idx < batch_end - 1:
+                f.write(f"    ({i}, {clean}),\n")
+            else:
+                f.write(f"    ({i}, {clean})\n")
+        
         f.write(";\n")
+        f.write("SET IDENTITY_INSERT [dbo].[Customer] OFF;\n")
         f.write("GO\n\n")
-    f.write("SET IDENTITY_INSERT [dbo].[Customer] OFF;\n")
-    f.write("GO\n\n")
     
     # Invoices - has IDENTITY, need to specify IDs explicitly with batching
     f.write("-- Additional invoices (413-4000+) - 2022-2026\n")
-    f.write("SET IDENTITY_INSERT [dbo].[Invoice] ON;\n")
-    invoice_data_lines = []
-    for i, invoice in enumerate(invoices, start=413):
-        clean = invoice.strip()
-        if clean.startswith("("):
-            clean = clean[1:]
-        if clean.endswith(")"):
-            clean = clean[:-1]
-        invoice_data_lines.append(f"    ({i}, {clean})")
     
-    # Batch the inserts
-    for batch_num in range(0, len(invoice_data_lines), batch_size):
-        batch = invoice_data_lines[batch_num:batch_num+batch_size]
+    # Write batches directly without building full list in memory
+    for batch_num in range(0, len(invoices), batch_size):
+        batch_end = min(batch_num + batch_size, len(invoices))
+        
+        f.write("SET IDENTITY_INSERT [dbo].[Invoice] ON;\n")
         f.write("INSERT INTO [dbo].[Invoice] ([InvoiceId], [CustomerId], [InvoiceDate], [BillingAddress], [BillingCity], [BillingState], [BillingCountry], [BillingPostalCode], [Total]) VALUES\n")
-        f.write(",\n".join(batch))
+        
+        # Write batch items
+        for idx in range(batch_num, batch_end):
+            i = 413 + idx
+            invoice = invoices[idx]
+            clean = invoice.strip()
+            if clean.startswith("("):
+                clean = clean[1:]
+            if clean.endswith(")"):
+                clean = clean[:-1]
+            
+            if idx < batch_end - 1:
+                f.write(f"    ({i}, {clean}),\n")
+            else:
+                f.write(f"    ({i}, {clean})\n")
+        
         f.write(";\n")
+        f.write("SET IDENTITY_INSERT [dbo].[Invoice] OFF;\n")
         f.write("GO\n\n")
-    f.write("SET IDENTITY_INSERT [dbo].[Invoice] OFF;\n")
-    f.write("GO\n\n")
     
     # Invoice Lines - has IDENTITY, need to specify IDs explicitly with batching
     f.write("-- Additional invoice lines (2241+) - Links invoices to tracks\n")
-    f.write("SET IDENTITY_INSERT [dbo].[InvoiceLine] ON;\n")
+    
+    # Write batches directly without building full list in memory
     for batch_num in range(0, len(invoice_lines), batch_size):
-        batch = invoice_lines[batch_num:batch_num+batch_size]
+        batch_end = min(batch_num + batch_size, len(invoice_lines))
+        batch = invoice_lines[batch_num:batch_end]
+        
+        f.write("SET IDENTITY_INSERT [dbo].[InvoiceLine] ON;\n")
         f.write("INSERT INTO [dbo].[InvoiceLine] ([InvoiceLineId], [InvoiceId], [TrackId], [UnitPrice], [Quantity]) VALUES\n")
         f.write(",\n".join(batch))
         f.write(";\n")
+        f.write("SET IDENTITY_INSERT [dbo].[InvoiceLine] OFF;\n")
         f.write("GO\n\n")
-    f.write("SET IDENTITY_INSERT [dbo].[InvoiceLine] OFF;\n")
-    f.write("GO\n\n")
     
     # Commit transaction
     f.write("-- Commit transaction\n")
