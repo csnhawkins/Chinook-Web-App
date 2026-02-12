@@ -728,9 +728,10 @@ def insert_to_sqlserver(server, database, sql_file, auth_type='windows', usernam
                 print(f"\nERROR in batch {i}:")
                 print(f"  {str(e)}")
                 print(f"  Batch preview: {batch[:200]}...")
+                conn.rollback()  # Rollback all changes on error
                 raise
         
-        conn.commit()
+        conn.commit()  # Commit all batches as one transaction
         cursor.close()
         conn.close()
         
@@ -1068,9 +1069,8 @@ def write_mssql_format(f, artists, albums, tracks, customers, invoices, invoice_
     """Write data in SQL Server format with batching (max 1000 rows per INSERT)"""
     batch_size = 1000
     
-    # Add transaction for better performance
-    f.write("-- Begin transaction for bulk insert\n")
-    f.write("BEGIN TRANSACTION;\n\n")
+    # Note: Transaction is managed by pyodbc when executing via Python
+    # For manual execution in SSMS, wrap this file with BEGIN TRANSACTION; ... COMMIT;
     
     # Artists - has IDENTITY, need to specify IDs explicitly
     f.write("-- Additional artists (276-355) - Real chart artists\n")
@@ -1232,10 +1232,8 @@ def write_mssql_format(f, artists, albums, tracks, customers, invoices, invoice_
         f.write("SET IDENTITY_INSERT [dbo].[InvoiceLine] OFF;\n")
         f.write("GO\n\n")
     
-    # Commit transaction
-    f.write("-- Commit transaction\n")
-    f.write("COMMIT TRANSACTION;\n")
-    f.write("GO\n")
+    # Transaction will be committed by Python code or manually in SSMS
+    f.write("-- End of data inserts\n")
 
 def write_oracle_format(f, artists, albums, tracks, customers, invoices, invoice_lines):
     """Write data in Oracle format using INSERT ALL with batching"""
