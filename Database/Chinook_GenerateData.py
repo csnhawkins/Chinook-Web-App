@@ -668,102 +668,106 @@ def generate_artists_albums_tracks(start_artist_id=276, start_album_id=348, star
     return artists, albums, tracks
 
 def test_sqlserver_connection(server, database, auth_type='windows', username=None, password=None):
-    """Test SQL Server connection before generating files"""
-    try:
-        import pyodbc
-    except ImportError:
-        print("ERROR: pyodbc module not found.")
-        print("Please install it with: pip install pyodbc")
-        return False
+    """Test SQL Server connection before generating files using sqlcmd"""
+    import subprocess
     
     try:
+        # Build sqlcmd test command
         if auth_type == 'windows':
-            conn_str = f'DRIVER={{ODBC Driver 17 for SQL Server}};SERVER={server};DATABASE={database};Trusted_Connection=yes;'
+            cmd = ['sqlcmd', '-S', server, '-d', database, '-E', '-Q', 'SELECT 1']
         else:
-            conn_str = f'DRIVER={{ODBC Driver 17 for SQL Server}};SERVER={server};DATABASE={database};UID={username};PWD={password};'
+            cmd = ['sqlcmd', '-S', server, '-d', database, '-U', username, '-P', password, '-Q', 'SELECT 1']
         
         print(f"Testing connection to {server}/{database}...")
-        conn = pyodbc.connect(conn_str)
-        conn.close()
-        print("✓ Connection successful\n")
-        return True
+        
+        # Execute test query
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        
+        if result.returncode == 0:
+            print("✓ Connection successful\n")
+            return True
+        else:
+            print(f"✗ Connection failed: {result.stderr}\n")
+            return False
+            
+    except FileNotFoundError:
+        print("✗ Connection failed: sqlcmd utility not found\n")
+        print("Please ensure SQL Server Command Line Utilities are installed.")
+        return False
+    except subprocess.TimeoutExpired:
+        print("✗ Connection failed: Connection timeout\n")
+        return False
     except Exception as e:
         print(f"✗ Connection failed: {str(e)}\n")
         return False
 
 def insert_to_sqlserver(server, database, sql_file, auth_type='windows', username=None, password=None):
-    """Execute SQL file directly into SQL Server database"""
-    try:
-        import pyodbc
-    except ImportError:
-        print("ERROR: pyodbc module not found.")
-        print("Please install it with: pip install pyodbc")
-        return
+    """Execute SQL file directly into SQL Server database using sqlcmd utility"""
+    import subprocess
+    import os
     
     try:
-        # Build connection string
+        # Build sqlcmd command
         if auth_type == 'windows':
-            conn_str = f'DRIVER={{ODBC Driver 17 for SQL Server}};SERVER={server};DATABASE={database};Trusted_Connection=yes;'
+            cmd = [
+                'sqlcmd',
+                '-S', server,
+                '-d', database,
+                '-E',  # Windows Authentication
+                '-i', sql_file,
+                '-I'   # Enable QUOTED_IDENTIFIER
+            ]
         else:
-            conn_str = f'DRIVER={{ODBC Driver 17 for SQL Server}};SERVER={server};DATABASE={database};UID={username};PWD={password};'
+            cmd = [
+                'sqlcmd',
+                '-S', server,
+                '-d', database,
+                '-U', username,
+                '-P', password,
+                '-i', sql_file,
+                '-I'   # Enable QUOTED_IDENTIFIER
+            ]
         
-        print(f"Connecting to SQL Server: {server}/{database}...")
-        conn = pyodbc.connect(conn_str, autocommit=False)  # Explicitly disable autocommit for transaction control
-        cursor = conn.cursor()
-        print("✓ Connected successfully\n")
+        print(f"Executing SQL file via sqlcmd: {server}/{database}...")
+        print(f"  File: {sql_file}\n")
         
-        print(f"Reading SQL file: {sql_file}")
-        with open(sql_file, 'r', encoding='utf-8') as f:
-            sql_content = f.read()
+        # Execute sqlcmd
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            encoding='utf-8',
+            errors='replace'
+        )
         
-        # Split by GO statements (SQL Server batch separator)
-        # Handle GO on its own line with various line endings
-        import re
-        batches = re.split(r'\n\s*GO\s*\n', sql_content, flags=re.IGNORECASE)
-        total_batches = len(batches)
+        # Check for errors
+        if result.returncode != 0:
+            print("\n" + "=" * 80)
+            print("ERROR: SQL execution failed")
+            print("=" * 80)
+            print(result.stderr)
+            if result.stdout:
+                print("\nOutput:")
+                print(result.stdout)
+            return False
         
-        print(f"Executing {total_batches} batches in a single transaction...\n")
-        
-        batch_count = 0
-        for i, batch in enumerate(batches, 1):
-            batch = batch.strip()
-            if not batch or batch.startswith('--'):
-                continue
-            
-            try:
-                cursor.execute(batch)
-                batch_count += 1
-                if batch_count % 10 == 0:
-                    print(f"  Progress: {batch_count} batches executed")
-            except pyodbc.Error as e:
-                print(f"\nERROR in batch {i}:")
-                print(f"  {str(e)}")
-                print(f"  Batch preview: {batch[:500]}...")
-                print(f"\n  Full batch content:")
-                print(f"  {batch[:1000]}")
-                conn.rollback()  # Rollback all changes on error
-                raise
-        
-        print(f"\n  Total batches executed: {batch_count}")
-        print(f"  Committing transaction...")
-        conn.commit()  # Commit all batches as one transaction
-        cursor.close()
-        conn.close()
+        # Show output (progress messages, row counts, etc.)
+        if result.stdout:
+            print(result.stdout)
         
         print("\n" + "=" * 80)
         print("SUCCESS: All data inserted directly into SQL Server database!")
         print("=" * 80)
+        return True
         
-    except pyodbc.Error as e:
-        print(f"\nERROR: Database connection or execution failed:")
-        print(f"  {str(e)}")
-        print("\nPlease check:")
-        print("  - SQL Server is running")
-        print("  - Database exists")
-        print("  - You have permission to insert data")
-        print("  - ODBC Driver 17 for SQL Server is installed")
+    except FileNotFoundError:
+        print("\nERROR: sqlcmd utility not found.")
+        print("\nPlease ensure SQL Server Command Line Utilities are installed.")
+        print("Download from: https://docs.microsoft.com/en-us/sql/tools/sqlcmd-utility")
+        return False
     except Exception as e:
         print(f"\nERROR: {str(e)}")
+        return False
 
 def main():
     import sys
@@ -1085,8 +1089,10 @@ def write_mssql_format(f, artists, albums, tracks, customers, invoices, invoice_
     """Write data in SQL Server format with batching (max 1000 rows per INSERT)"""
     batch_size = 1000
     
-    # Note: Transaction is managed by pyodbc when executing via Python
-    # For manual execution in SSMS, wrap this file with BEGIN TRANSACTION; ... COMMIT;
+    # Add transaction wrapper for atomicity
+    f.write("-- Begin transaction for bulk insert\n")
+    f.write("BEGIN TRANSACTION;\n")
+    f.write("GO\n\n")
     
     # Artists - has IDENTITY, need to specify IDs explicitly
     f.write("-- Additional artists (276-355) - Real chart artists\n")
@@ -1248,8 +1254,10 @@ def write_mssql_format(f, artists, albums, tracks, customers, invoices, invoice_
         f.write("SET IDENTITY_INSERT [dbo].[InvoiceLine] OFF;\n")
         f.write("GO\n\n")
     
-    # Transaction will be committed by Python code or manually in SSMS
-    f.write("-- End of data inserts\n")
+    # Commit transaction
+    f.write("-- Commit all changes\n")
+    f.write("COMMIT TRANSACTION;\n")
+    f.write("GO\n")
 
 def write_oracle_format(f, artists, albums, tracks, customers, invoices, invoice_lines):
     """Write data in Oracle format using INSERT ALL with batching"""
