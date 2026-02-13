@@ -1707,6 +1707,20 @@ def write_oracle_format(f, artists, albums, tracks, customers, invoices, invoice
         f.write("-- SystemLog entries for database size inflation\n")
         f.write("-- Oracle generates ~3.5KB padding per row using RPAD() (PL/SQL limit: 32000 chars)\n\n")
         
+        # Advance the sequence to avoid conflicts with existing data
+        f.write("-- Advance SystemLog sequence to avoid conflicts\n")
+        f.write("DECLARE\n")
+        f.write("  v_max_id NUMBER;\n")
+        f.write("  v_seq_val NUMBER;\n")
+        f.write("BEGIN\n")
+        f.write("  SELECT NVL(MAX(LogId), 0) INTO v_max_id FROM SYSTEMLOG;\n")
+        f.write("  LOOP\n")
+        f.write("    SELECT SystemLog_Seq.NEXTVAL INTO v_seq_val FROM dual;\n")
+        f.write("    EXIT WHEN v_seq_val > v_max_id;\n")
+        f.write("  END LOOP;\n")
+        f.write("END;\n")
+        f.write("/\n\n")
+        
         # Process in batches (Oracle INSERT ALL has 1000 row limit, use 500 to be safe)
         total_batches = (len(systemlog) + batch_size - 1) // batch_size
         for batch_num in range(0, len(systemlog), batch_size):
@@ -1741,7 +1755,7 @@ def write_oracle_format(f, artists, albums, tracks, customers, invoices, invoice
         f.write("-- Pad log messages for database size inflation (Oracle PL/SQL limit: 32000 chars)\n")
         f.write("UPDATE SYSTEMLOG\n")
         f.write("SET LogMessage = LogMessage || ' | ' || RPAD('PADDING_', 32000, 'PADDING_')\n")
-        f.write("WHERE LogId >= 1000;\n\n")
+        f.write("WHERE LogId > (SELECT NVL(MAX(LogId), 0) FROM SYSTEMLOG WHERE LogMessage NOT LIKE '%PADDING_%');\n\n")
     
     # Commit transaction
     f.write("-- Commit transaction\n")
