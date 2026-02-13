@@ -1555,8 +1555,13 @@ def write_oracle_format(f, artists, albums, tracks, customers, invoices, invoice
     f.write("-- Additional artists (276-355) - Real chart artists\n")
     f.write("INSERT ALL\n")
     for i, artist in enumerate(artists, start=276):
-        artist_name = artist.replace("    (N'", "").replace("')", "")
-        artist_name = artist_name.replace("'", "''")  # Escape single quotes
+        # Artist format is: "    (N'Artist Name')" where quotes are already escaped
+        # Just remove prefix and suffix, keeping the name as-is (already escaped)
+        artist_clean = artist.strip()
+        if artist_clean.startswith("(N'") and artist_clean.endswith("')"):
+            artist_name = artist_clean[3:-2]  # Remove (N' from start and ') from end
+        else:
+            artist_name = artist_clean.replace("    (N'", "").replace("')", "")
         f.write(f"  INTO Artist (ArtistId, Name) VALUES ({i}, '{artist_name}')\n")
     f.write("SELECT * FROM dual;\n\n")
     
@@ -1565,9 +1570,13 @@ def write_oracle_format(f, artists, albums, tracks, customers, invoices, invoice
     f.write("INSERT ALL\n")
     album_id = 348
     for album in albums:
-        # Parse: (N'album_name', artist_id)
-        parts = album.strip().replace("    (N'", "").rsplit("', ", 1)
-        album_name = parts[0].replace("'", "''")
+        # Format: "    (N'album_name', artist_id)" where quotes are already escaped
+        # Split on ', ' from the right to get name and artist_id
+        album_clean = album.strip()
+        if album_clean.startswith("(N'"):
+            album_clean = album_clean[3:]  # Remove (N'
+        parts = album_clean.rsplit("', ", 1)
+        album_name = parts[0]  # Already escaped, don't double-escape
         artist_id = parts[1].replace(")", "")
         f.write(f"  INTO Album (AlbumId, Title, ArtistId) VALUES ({album_id}, '{album_name}', {artist_id})\n")
         album_id += 1
@@ -1582,9 +1591,12 @@ def write_oracle_format(f, artists, albums, tracks, customers, invoices, invoice
         batch = tracks[i:i+batch_size]
         f.write("INSERT ALL\n")
         for track in batch:
-            # Parse: (N'track_name', album_id, media_type, genre_id, NULL, duration, bytes, price)
-            parts = track.strip().replace("    (N'", "").split("', ", 1)
-            track_name = parts[0].replace("'", "''")
+            # Format: "    (N'track_name', album_id, media_type, genre_id, NULL, duration, bytes, price)"
+            track_clean = track.strip()
+            if track_clean.startswith("(N'"):
+                track_clean = track_clean[3:]  # Remove (N'
+            parts = track_clean.split("', ", 1)
+            track_name = parts[0]  # Already escaped, don't double-escape
             rest = parts[1].replace(")", "").split(", ")
             album_id, media_type, genre_id, composer, duration, file_bytes, price = rest
             f.write(f"  INTO Track (TrackId, Name, AlbumId, MediaTypeId, GenreId, Composer, Milliseconds, Bytes, UnitPrice) VALUES ({track_id}, '{track_name}', {album_id}, {media_type}, {genre_id}, {composer}, {duration}, {file_bytes}, {price})\n")
