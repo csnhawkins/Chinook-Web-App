@@ -1884,27 +1884,27 @@ def write_mysql_format(f, artists, albums, tracks, customers, invoices, invoice_
     
     # Artists
     f.write("-- Additional artists (276-355) - Real chart artists\n")
-    mysql_artists = [a.replace("    (N'", "    ('") for a in artists]
+    mysql_artists = [a.replace("N'", "'") for a in artists]
     f.write("INSERT INTO `Artist` (`Name`) VALUES\n")
     f.write(",\n".join(mysql_artists))
     f.write(";\n\n")
     
     # Albums
     f.write("-- Additional albums (348-507) - Real chart albums\n")
-    mysql_albums = [a.replace("    (N'", "    ('") for a in albums]
+    mysql_albums = [a.replace("N'", "'") for a in albums]
     f.write("INSERT INTO `Album` (`Title`, `ArtistId`) VALUES\n")
     f.write(",\n".join(mysql_albums))
     f.write(";\n\n")
     
     # Tracks\n    f.write("-- Additional tracks (3504-3942) - Real chart tracks\n")
-    mysql_tracks = [t.replace("    (N'", "    ('") for t in tracks]
+    mysql_tracks = [t.replace("N'", "'") for t in tracks]
     f.write("INSERT INTO `Track` (`Name`, `AlbumId`, `MediaTypeId`, `GenreId`, `Composer`, `Milliseconds`, `Bytes`, `UnitPrice`) VALUES\n")
     f.write(",\n".join(mysql_tracks))
     f.write(";\n\n")
     
     # Customers - with batching for large datasets
     f.write("-- Additional customers (60-1000+)\n")
-    mysql_customers = [c.replace("    (N'", "    ('") for c in customers]
+    mysql_customers = [c.replace("N'", "'") for c in customers]
     for batch_num in range(0, len(mysql_customers), batch_size):
         batch = mysql_customers[batch_num:batch_num+batch_size]
         f.write("INSERT INTO `Customer` (`FirstName`, `LastName`, `Company`, `Address`, `City`, `State`, `Country`, `PostalCode`, `Phone`, `Fax`, `Email`, `SupportRepId`) VALUES\n")
