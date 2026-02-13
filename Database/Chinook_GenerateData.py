@@ -992,8 +992,8 @@ def main():
             print()
             
             while True:
-                mode_choice = input("Enter choice (1-2): ").strip()
-                if mode_choice == '1':
+                mode_choice = input("Enter choice (1-2) [default: 1]: ").strip()
+                if mode_choice == '' or mode_choice == '1':
                     insertion_mode = 'file'
                     break
                 elif mode_choice == '2':
@@ -1694,7 +1694,7 @@ def write_oracle_format(f, artists, albums, tracks, customers, invoices, invoice
     if systemlog and len(systemlog) > 0:
         f.write("-- SystemLog entries for database size inflation\n")
         f.write("-- Note: Only inserts if SystemLog table exists in the database\n")
-        f.write("-- Oracle generates ~7.8KB padding per row using RPAD() for fast insertion\n")
+        f.write("-- Oracle generates ~3.5KB padding per row using RPAD() (PL/SQL limit: 32000 chars)\n")
         f.write("\n")
         
         # Check if table exists
@@ -1732,14 +1732,23 @@ def write_oracle_format(f, artists, albums, tracks, customers, invoices, invoice
                 # Skip log_id (parts[0]) - Oracle trigger will auto-generate
                 invoice_id = parts[1]
                 log_date = parts[2].strip("'")
-                log_msg = parts[3].replace("N'", "'").replace("''", "''''")
+                log_msg = parts[3].replace("N'", "'")
                 
-                # Oracle: Use RPAD to add padding (RPAD pads to specified length)
-                # RPAD(string, length, pad_string) - we want ~7.8KB so use RPAD with REPEAT-like approach
-                f.write(f"      INTO SystemLog (InvoiceId, LogDate, LogMessage) VALUES ({invoice_id}, TO_DATE('{log_date}', 'YYYY/MM/DD'), {log_msg} || ' | ' || RPAD('PADDING_', 70000, 'PADDING_'))\n")
+                # Oracle CLOB limitation: RPAD in SQL context is limited to 4000 bytes
+                # Instead of padding during insert, we'll insert base data and pad with UPDATE
+                # For now, insert without padding - Oracle's RPAD can't handle 70000 chars in INSERT context
+                f.write(f"      INTO SystemLog (InvoiceId, LogDate, LogMessage) VALUES ({invoice_id}, TO_DATE('{log_date}', 'YYYY/MM/DD'), {log_msg})\n")
             
             f.write("    SELECT * FROM dual;\n")
             f.write("\n")
+        
+        # After inserts, pad the log messages using UPDATE for CLOB handling
+        # Oracle PL/SQL RPAD max is 32767 chars (about 32KB) which gives ~3.5KB per row with overhead
+        f.write("    -- Pad log messages for database size inflation (Oracle PL/SQL limit: 32767 chars)\n")
+        f.write("    UPDATE SystemLog\n")
+        f.write("    SET LogMessage = LogMessage || ' | ' || RPAD('PADDING_', 32000, 'PADDING_')\n")
+        f.write("    WHERE LogId >= 1000;\n")
+        f.write("\n")
         
         f.write("  END IF;\n")
         f.write("END;\n")
