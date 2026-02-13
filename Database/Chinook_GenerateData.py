@@ -1731,7 +1731,8 @@ def write_oracle_format(f, artists, albums, tracks, customers, invoices, invoice
                 log_msg = parts[3].replace("N'", "'")
                 
                 # Insert without padding - will pad with UPDATE after all inserts
-                f.write(f"  INTO SYSTEMLOG (InvoiceId, LogDate, LogMessage) VALUES ({invoice_id}, TO_DATE('{log_date}', 'YYYY/MM/DD'), {log_msg})\n")
+                # Oracle TO_DATE format: YYYY-MM-DD HH24:MI:SS
+                f.write(f"  INTO SYSTEMLOG (InvoiceId, LogDate, LogMessage) VALUES ({invoice_id}, TO_DATE('{log_date}', 'YYYY-MM-DD HH24:MI:SS'), {log_msg})\n")
             
             f.write("SELECT * FROM dual;\n\n")
         
