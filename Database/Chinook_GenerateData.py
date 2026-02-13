@@ -1707,17 +1707,6 @@ def write_oracle_format(f, artists, albums, tracks, customers, invoices, invoice
         f.write("-- SystemLog entries for database size inflation\n")
         f.write("-- Oracle generates ~3.5KB padding per row using RPAD() (PL/SQL limit: 32000 chars)\n\n")
         
-        # Advance the sequence to avoid conflicts with existing data (skip first 1000 IDs)
-        f.write("-- Advance SystemLog sequence past existing data to avoid conflicts\n")
-        f.write("DECLARE\n")
-        f.write("  v_dummy NUMBER;\n")
-        f.write("BEGIN\n")
-        f.write("  FOR i IN 1..1000 LOOP\n")
-        f.write("    SELECT SystemLog_Seq.NEXTVAL INTO v_dummy FROM dual;\n")
-        f.write("  END LOOP;\n")
-        f.write("END;\n")
-        f.write("/\n\n")
-        
         # Process in batches (Oracle INSERT ALL has 1000 row limit, use 500 to be safe)
         total_batches = (len(systemlog) + batch_size - 1) // batch_size
         for batch_num in range(0, len(systemlog), batch_size):
@@ -1736,14 +1725,16 @@ def write_oracle_format(f, artists, albums, tracks, customers, invoices, invoice
                 
                 # Parse the fields
                 parts = log_clean.split(", ", 3)
-                # Skip log_id (parts[0]) - Oracle trigger will auto-generate
                 invoice_id = parts[1]
                 log_date = parts[2].strip("'")
                 log_msg = parts[3].replace("N'", "'")
                 
-                # Insert without padding - will pad with UPDATE after all inserts
+                # Start LogId from 1000 to avoid conflicts with existing data
+                new_log_id = 1000 + idx
+                
+                # Insert with explicit LogId starting from 1000
                 # Oracle TO_DATE format: YYYY-MM-DD HH24:MI:SS
-                f.write(f"  INTO SYSTEMLOG (InvoiceId, LogDate, LogMessage) VALUES ({invoice_id}, TO_DATE('{log_date}', 'YYYY-MM-DD HH24:MI:SS'), {log_msg})\n")
+                f.write(f"  INTO SYSTEMLOG (LogId, InvoiceId, LogDate, LogMessage) VALUES ({new_log_id}, {invoice_id}, TO_DATE('{log_date}', 'YYYY-MM-DD HH24:MI:SS'), {log_msg})\n")
             
             f.write("SELECT * FROM dual;\n\n")
         
