@@ -1674,15 +1674,20 @@ def write_oracle_format(f, artists, albums, tracks, customers, invoices, invoice
     
     # Invoice Lines
     f.write("-- Additional invoice lines (2241+) - Links invoices to tracks\n")
-    for i in range(0, len(invoice_lines), batch_size):
-        batch = invoice_lines[i:i+batch_size]
+    oracle_invoice_lines = []
+    for line in invoice_lines:
+        # Convert from: "    (invoice_line_id, invoice_id, track_id, unit_price, quantity)"
+        # Just remove leading spaces and keep the rest
+        line_clean = line.strip().replace("    (", "").replace(")", "")
+        oracle_line = f"  INTO InvoiceLine (InvoiceLineId, InvoiceId, TrackId, UnitPrice, Quantity) VALUES ({line_clean})"
+        oracle_invoice_lines.append(oracle_line)
+    
+    # Write in batches
+    for i in range(0, len(oracle_invoice_lines), batch_size):
+        batch = oracle_invoice_lines[i:i+batch_size]
         f.write("INSERT ALL\n")
-        for line in batch:
-            # Parse: (invoice_line_id, invoice_id, track_id, unit_price, quantity)
-            parts = line.strip().replace("    (", "").replace(")", "").split(", ")
-            il_id, inv_id, trk_id, price, qty = parts
-            f.write(f"  INTO InvoiceLine (InvoiceLineId, InvoiceId, TrackId, UnitPrice, Quantity) VALUES ({il_id}, {inv_id}, {trk_id}, {price}, {qty})\n")
-        f.write("SELECT 1 FROM dual;\n")
+        f.write("\n".join(batch))
+        f.write("\nSELECT 1 FROM dual;\n")
     f.write("\n")
     
     # SystemLog - optional table for database size inflation
