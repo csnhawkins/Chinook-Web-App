@@ -1545,11 +1545,11 @@ def write_mssql_format(f, artists, albums, tracks, customers, invoices, invoice_
 
 def write_oracle_format(f, artists, albums, tracks, customers, invoices, invoice_lines, systemlog):
     """Write data in Oracle format using INSERT ALL with batching"""
+    import re
     batch_size = 500  # Oracle INSERT ALL limit
     
-    # Add transaction for better performance
-    f.write("-- Begin transaction for bulk insert\n")
-    f.write("SET AUTOCOMMIT OFF;\n\n")
+    # Oracle doesn't auto-commit by default, so no need for SET AUTOCOMMIT
+    f.write("-- Oracle bulk insert\n\n")
     
     # Artists
     f.write("-- Additional artists (276-355) - Real chart artists\n")
@@ -1643,28 +1643,33 @@ def write_oracle_format(f, artists, albums, tracks, customers, invoices, invoice
     
     # Invoices
     f.write("-- Additional invoices (413-4000+) - 2022-2026\n")
-    invoice_id = 413
-    for i in range(0, len(invoices), batch_size):
-        batch = invoices[i:i+batch_size]
+    oracle_invoices = []
+    for inv in invoices:
+        # Convert from SQL Server format to Oracle format
+        # Original: (customer_id, 'YYYY/MM/DD', N'address', N'city', N'state' or NULL, N'country', N'postal', total)
+        # Need to wrap date with TO_DATE() and remove N' prefix
+        inv_clean = inv.replace("    (", "").replace(")", "").strip()
+        
+        # Match pattern: number, 'date', then rest
+        match = re.match(r"(\d+),\s*'([^']+)',\s*(.+)", inv_clean)
+        if match:
+            customer_id = match.group(1)
+            invoice_date = match.group(2)
+            rest = match.group(3)
+            
+            # Remove N' prefix from all strings
+            rest = rest.replace("N'", "'")
+            
+            # Rebuild the invoice with TO_DATE
+            oracle_inv = f"  INTO Invoice (InvoiceId, CustomerId, InvoiceDate, BillingAddress, BillingCity, BillingState, BillingCountry, BillingPostalCode, Total) VALUES ({len(oracle_invoices) + 413}, {customer_id}, TO_DATE('{invoice_date}', 'YYYY/MM/DD'), {rest})"
+            oracle_invoices.append(oracle_inv)
+    
+    # Write in batches
+    for i in range(0, len(oracle_invoices), batch_size):
+        batch = oracle_invoices[i:i+batch_size]
         f.write("INSERT ALL\n")
-        for invoice in batch:
-            # Parse: (customer_id, 'date', N'address', N'city', state, N'country', N'postal', total)
-            parts = invoice.strip().replace("    (", "").replace(")", "").split(", ")
-            cust_id = parts[0]
-            inv_date = parts[1].strip("'")
-            # Convert YYYY/MM/DD to Oracle TO_DATE format
-            inv_address = parts[2].replace("N'", "").strip("'").replace("'", "''")
-            inv_city = parts[3].replace("N'", "").strip("'").replace("'", "''")
-            inv_state = parts[4]
-            inv_country = parts[5].replace("N'", "").strip("'").replace("'", "''")
-            inv_postal = parts[6].replace("N'", "").strip("'").replace("'", "''")
-            inv_total = parts[7]
-            
-            state_val = 'NULL' if inv_state == 'NULL' else inv_state
-            
-            f.write(f"  INTO Invoice (InvoiceId, CustomerId, InvoiceDate, BillingAddress, BillingCity, BillingState, BillingCountry, BillingPostalCode, Total) VALUES ({invoice_id}, {cust_id}, TO_DATE('{inv_date}', 'YYYY/MM/DD'), '{inv_address}', '{inv_city}', {state_val}, '{inv_country}', '{inv_postal}', {inv_total})\n")
-            invoice_id += 1
-        f.write("SELECT 1 FROM dual;\n")
+        f.write("\n".join(batch))
+        f.write("\nSELECT 1 FROM dual;\n")
     f.write("\n")
     
     # Invoice Lines
