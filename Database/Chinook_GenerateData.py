@@ -1677,8 +1677,8 @@ def write_oracle_format(f, artists, albums, tracks, customers, invoices, invoice
     oracle_invoice_lines = []
     for line in invoice_lines:
         # Convert from: "    (invoice_line_id, invoice_id, track_id, unit_price, quantity)"
-        # Just remove leading spaces and keep the rest
-        line_clean = line.strip().replace("    (", "").replace(")", "")
+        # Remove spaces, then remove both ( and )
+        line_clean = line.strip().lstrip("(").rstrip(")")
         oracle_line = f"  INTO InvoiceLine (InvoiceLineId, InvoiceId, TrackId, UnitPrice, Quantity) VALUES ({line_clean})"
         oracle_invoice_lines.append(oracle_line)
     
