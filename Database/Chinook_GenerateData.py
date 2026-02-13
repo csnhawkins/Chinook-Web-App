@@ -1705,31 +1705,15 @@ def write_oracle_format(f, artists, albums, tracks, customers, invoices, invoice
     # SystemLog - optional table for database size inflation
     if systemlog and len(systemlog) > 0:
         f.write("-- SystemLog entries for database size inflation\n")
-        f.write("-- Note: Only inserts if SystemLog table exists in the database\n")
-        f.write("-- Oracle generates ~3.5KB padding per row using RPAD() (PL/SQL limit: 32000 chars)\n")
-        f.write("\n")
-        
-        # Check if table exists
-        f.write("DECLARE\n")
-        f.write("  v_table_exists NUMBER;\n")
-        f.write("BEGIN\n")
-        f.write("  SELECT COUNT(*) INTO v_table_exists FROM user_tables WHERE table_name = 'SYSTEMLOG';\n")
-        f.write("  \n")
-        f.write("  IF v_table_exists > 0 THEN\n")
+        f.write("-- Oracle generates ~3.5KB padding per row using RPAD() (PL/SQL limit: 32000 chars)\n\n")
         
         # Process in batches (Oracle INSERT ALL has 1000 row limit, use 500 to be safe)
         total_batches = (len(systemlog) + batch_size - 1) // batch_size
         for batch_num in range(0, len(systemlog), batch_size):
             batch_end = min(batch_num + batch_size, len(systemlog))
-            batch_index = batch_num // batch_size + 1
-            
-            # Progress tracking
-            progress_interval = 5 if total_batches >= 20 else 1
-            if batch_index % progress_interval == 1:
-                f.write(f"    DBMS_OUTPUT.PUT_LINE('Inserting system log entries... batch {batch_index} of {total_batches}');\n")
             
             # Write batch using INSERT ALL
-            f.write("    INSERT ALL\n")
+            f.write("INSERT ALL\n")
             for idx in range(batch_num, batch_end):
                 log_entry = systemlog[idx]
                 # Convert from (log_id, invoice_id, 'YYYY/MM/DD', N'message')
@@ -1746,26 +1730,17 @@ def write_oracle_format(f, artists, albums, tracks, customers, invoices, invoice
                 log_date = parts[2].strip("'")
                 log_msg = parts[3].replace("N'", "'")
                 
-                # Oracle CLOB limitation: RPAD in SQL context is limited to 4000 bytes
-                # Instead of padding during insert, we'll insert base data and pad with UPDATE
-                # For now, insert without padding - Oracle's RPAD can't handle 70000 chars in INSERT context
-                f.write(f"      INTO SystemLog (InvoiceId, LogDate, LogMessage) VALUES ({invoice_id}, TO_DATE('{log_date}', 'YYYY/MM/DD'), {log_msg})\n")
+                # Insert without padding - will pad with UPDATE after all inserts
+                f.write(f"  INTO SYSTEMLOG (InvoiceId, LogDate, LogMessage) VALUES ({invoice_id}, TO_DATE('{log_date}', 'YYYY/MM/DD'), {log_msg})\n")
             
-            f.write("    SELECT * FROM dual;\n")
-            f.write("\n")
+            f.write("SELECT * FROM dual;\n\n")
         
-        # After inserts, pad the log messages using UPDATE for CLOB handling
+        # After all inserts, pad the log messages using UPDATE
         # Oracle PL/SQL RPAD max is 32767 chars (about 32KB) which gives ~3.5KB per row with overhead
-        f.write("    -- Pad log messages for database size inflation (Oracle PL/SQL limit: 32767 chars)\n")
-        f.write("    UPDATE SystemLog\n")
-        f.write("    SET LogMessage = LogMessage || ' | ' || RPAD('PADDING_', 32000, 'PADDING_')\n")
-        f.write("    WHERE LogId >= 1000;\n")
-        f.write("\n")
-        
-        f.write("  END IF;\n")
-        f.write("END;\n")
-        f.write("/\n")
-        f.write("\n")
+        f.write("-- Pad log messages for database size inflation (Oracle PL/SQL limit: 32000 chars)\n")
+        f.write("UPDATE SYSTEMLOG\n")
+        f.write("SET LogMessage = LogMessage || ' | ' || RPAD('PADDING_', 32000, 'PADDING_')\n")
+        f.write("WHERE LogId >= 1000;\n\n")
     
     # Commit transaction
     f.write("-- Commit transaction\n")
