@@ -1558,7 +1558,7 @@ def write_oracle_format(f, artists, albums, tracks, customers, invoices, invoice
         artist_name = artist.replace("    (N'", "").replace("')", "")
         artist_name = artist_name.replace("'", "''")  # Escape single quotes
         f.write(f"  INTO Artist (ArtistId, Name) VALUES ({i}, '{artist_name}')\n")
-    f.write("SELECT 1 FROM dual;\n\n")
+    f.write("SELECT * FROM dual;\n\n")
     
     # Albums - need to parse the format
     f.write("-- Additional albums (348-507) - Real chart albums\n")
@@ -1571,7 +1571,7 @@ def write_oracle_format(f, artists, albums, tracks, customers, invoices, invoice
         artist_id = parts[1].replace(")", "")
         f.write(f"  INTO Album (AlbumId, Title, ArtistId) VALUES ({album_id}, '{album_name}', {artist_id})\n")
         album_id += 1
-    f.write("SELECT 1 FROM dual;\n\n")
+    f.write("SELECT * FROM dual;\n\n")
     
     # Tracks
     f.write("-- Additional tracks (3504-3942) - Real chart tracks\n")
@@ -1589,7 +1589,7 @@ def write_oracle_format(f, artists, albums, tracks, customers, invoices, invoice
             album_id, media_type, genre_id, composer, duration, file_bytes, price = rest
             f.write(f"  INTO Track (TrackId, Name, AlbumId, MediaTypeId, GenreId, Composer, Milliseconds, Bytes, UnitPrice) VALUES ({track_id}, '{track_name}', {album_id}, {media_type}, {genre_id}, {composer}, {duration}, {file_bytes}, {price})\n")
             track_id += 1
-        f.write("SELECT 1 FROM dual;\n")
+        f.write("SELECT * FROM dual;\n")
     f.write("\n")
     
     # Customers
@@ -1638,7 +1638,7 @@ def write_oracle_format(f, artists, albums, tracks, customers, invoices, invoice
             
             f.write(f"  INTO Customer (CustomerId, FirstName, LastName, Company, Address, City, State, Country, PostalCode, Phone, Fax, Email, SupportRepId) VALUES ({customer_id}, '{fn}', '{ln}', {co_val}, '{ad}', '{ci}', {st_val}, '{cty}', '{pc}', '{ph}', NULL, '{em}', {sr})\n")
             customer_id += 1
-        f.write("SELECT 1 FROM dual;\n")
+        f.write("SELECT * FROM dual;\n")
     f.write("\n")
     
     # Invoices
@@ -1669,7 +1669,7 @@ def write_oracle_format(f, artists, albums, tracks, customers, invoices, invoice
         batch = oracle_invoices[i:i+batch_size]
         f.write("INSERT ALL\n")
         f.write("\n".join(batch))
-        f.write("\nSELECT 1 FROM dual;\n")
+        f.write("\nSELECT * FROM dual;\n")
     f.write("\n")
     
     # Invoice Lines
@@ -1687,7 +1687,7 @@ def write_oracle_format(f, artists, albums, tracks, customers, invoices, invoice
         batch = oracle_invoice_lines[i:i+batch_size]
         f.write("INSERT ALL\n")
         f.write("\n".join(batch))
-        f.write("\nSELECT 1 FROM dual;\n")
+        f.write("\nSELECT * FROM dual;\n")
     f.write("\n")
     
     # SystemLog - optional table for database size inflation
@@ -1738,7 +1738,7 @@ def write_oracle_format(f, artists, albums, tracks, customers, invoices, invoice
                 # RPAD(string, length, pad_string) - we want ~7.8KB so use RPAD with REPEAT-like approach
                 f.write(f"      INTO SystemLog (InvoiceId, LogDate, LogMessage) VALUES ({invoice_id}, TO_DATE('{log_date}', 'YYYY/MM/DD'), {log_msg} || ' | ' || RPAD('PADDING_', 70000, 'PADDING_'))\n")
             
-            f.write("    SELECT 1 FROM dual;\n")
+            f.write("    SELECT * FROM dual;\n")
             f.write("\n")
         
         f.write("  END IF;\n")
