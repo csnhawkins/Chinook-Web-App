@@ -1709,9 +1709,11 @@ def write_oracle_format(f, artists, albums, tracks, customers, invoices, invoice
         
         # Advance the sequence to avoid conflicts with existing data (skip first 1000 IDs)
         f.write("-- Advance SystemLog sequence past existing data to avoid conflicts\n")
+        f.write("DECLARE\n")
+        f.write("  v_dummy NUMBER;\n")
         f.write("BEGIN\n")
         f.write("  FOR i IN 1..1000 LOOP\n")
-        f.write("    EXECUTE IMMEDIATE 'SELECT SystemLog_Seq.NEXTVAL FROM dual';\n")
+        f.write("    SELECT SystemLog_Seq.NEXTVAL INTO v_dummy FROM dual;\n")
         f.write("  END LOOP;\n")
         f.write("END;\n")
         f.write("/\n\n")
