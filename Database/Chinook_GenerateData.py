@@ -1787,8 +1787,8 @@ def write_postgresql_format(f, artists, albums, tracks, customers, invoices, inv
         batch = postgres_customers[batch_num:batch_num+batch_size]
         batch_index = batch_num // batch_size + 1
         
-        # Add progress message every 10 batches for large datasets
-        if batch_index % 10 == 1 and total_batches >= 10:
+        # Add progress message every 10 batches (or batch 1 for smaller datasets)
+        if (batch_index % 10 == 1 and total_batches >= 10) or (batch_index == 1 and total_batches < 10):
             f.write(f"DO $$ BEGIN RAISE NOTICE '[%] Inserting customers... batch % of %', NOW(), {batch_index}, {total_batches}; END $$;\n")
         
         f.write("INSERT INTO customer (first_name, last_name, company, address, city, state, country, postal_code, phone, fax, email, support_rep_id) VALUES\n")
@@ -1811,8 +1811,8 @@ def write_postgresql_format(f, artists, albums, tracks, customers, invoices, inv
         batch = postgres_invoices[batch_num:batch_num+batch_size]
         batch_index = batch_num // batch_size + 1
         
-        # Add progress message every 10 batches for large datasets
-        if batch_index % 10 == 1 and total_batches >= 10:
+        # Add progress message every 10 batches (or batch 1 for smaller datasets)
+        if (batch_index % 10 == 1 and total_batches >= 10) or (batch_index == 1 and total_batches < 10):
             f.write(f"DO $$ BEGIN RAISE NOTICE '[%] Inserting invoices... batch % of %', NOW(), {batch_index}, {total_batches}; END $$;\n")
         
         f.write("INSERT INTO invoice (customer_id, invoice_date, billing_address, billing_city, billing_state, billing_country, billing_postal_code, total) VALUES\n")
@@ -1827,8 +1827,8 @@ def write_postgresql_format(f, artists, albums, tracks, customers, invoices, inv
         batch = postgres_invoice_lines[batch_num:batch_num+batch_size]
         batch_index = batch_num // batch_size + 1
         
-        # Add progress message every 10 batches for large datasets
-        if batch_index % 10 == 1 and total_batches >= 10:
+        # Add progress message every 10 batches (or batch 1 for smaller datasets)
+        if (batch_index % 10 == 1 and total_batches >= 10) or (batch_index == 1 and total_batches < 10):
             f.write(f"DO $$ BEGIN RAISE NOTICE '[%] Inserting invoice lines... batch % of %', NOW(), {batch_index}, {total_batches}; END $$;\n")
         
         f.write("INSERT INTO invoice_line (invoice_line_id, invoice_id, track_id, unit_price, quantity) OVERRIDING SYSTEM VALUE VALUES\n")
@@ -1838,13 +1838,13 @@ def write_postgresql_format(f, artists, albums, tracks, customers, invoices, inv
     # SystemLog - optional table for database size inflation
     if systemlog and len(systemlog) > 0:
         f.write("-- SystemLog entries for database size inflation\n")
-        f.write("-- Note: Only inserts if systemlog table exists in the database\n")
+        f.write("-- Note: Only inserts if system_log table exists in the database\n")
         f.write("-- PostgreSQL generates ~7.8KB padding per row using REPEAT() for fast insertion\n\n")
         
         # Check if table exists
         f.write("DO $$\n")
         f.write("BEGIN\n")
-        f.write("  IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'systemlog') THEN\n")
+        f.write("  IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'system_log') THEN\n")
         
         # Process in batches
         total_batches = (len(systemlog) + batch_size - 1) // batch_size
@@ -1881,7 +1881,7 @@ def write_postgresql_format(f, artists, albums, tracks, customers, invoices, inv
                 
                 postgres_systemlog.append(f"    ({log_id}, {invoice_id}, TIMESTAMP '{log_date}', {log_msg})")
             
-            f.write("    INSERT INTO systemlog (log_id, invoice_id, log_date, log_message) OVERRIDING SYSTEM VALUE\n")
+            f.write("    INSERT INTO system_log (log_id, invoice_id, log_date, log_message) OVERRIDING SYSTEM VALUE\n")
             f.write("    SELECT log_id, invoice_id, log_date, log_message || ' | ' || REPEAT('PADDING_', 70000)\n")
             f.write("    FROM (VALUES\n")
             f.write(",\n".join(postgres_systemlog))
@@ -1933,8 +1933,8 @@ def write_mysql_format(f, artists, albums, tracks, customers, invoices, invoice_
         batch = mysql_customers[batch_num:batch_num+batch_size]
         batch_index = batch_num // batch_size + 1
         
-        # Add progress message every 10 batches for large datasets
-        if batch_index % 10 == 1 and total_batches >= 10:
+        # Add progress message every 10 batches (or batch 1 for smaller datasets)
+        if (batch_index % 10 == 1 and total_batches >= 10) or (batch_index == 1 and total_batches < 10):
             f.write(f"SELECT CONCAT('[', NOW(), '] Inserting customers... batch {batch_index} of {total_batches}') AS Progress;\n")
         
         f.write("INSERT INTO `Customer` (`FirstName`, `LastName`, `Company`, `Address`, `City`, `State`, `Country`, `PostalCode`, `Phone`, `Fax`, `Email`, `SupportRepId`) VALUES\n")
@@ -1956,8 +1956,8 @@ def write_mysql_format(f, artists, albums, tracks, customers, invoices, invoice_
         batch = mysql_invoices[batch_num:batch_num+batch_size]
         batch_index = batch_num // batch_size + 1
         
-        # Add progress message every 10 batches for large datasets
-        if batch_index % 10 == 1 and total_batches >= 10:
+        # Add progress message every 10 batches (or batch 1 for smaller datasets)
+        if (batch_index % 10 == 1 and total_batches >= 10) or (batch_index == 1 and total_batches < 10):
             f.write(f"SELECT CONCAT('[', NOW(), '] Inserting invoices... batch {batch_index} of {total_batches}') AS Progress;\n")
         
         f.write("INSERT INTO `Invoice` (`CustomerId`, `InvoiceDate`, `BillingAddress`, `BillingCity`, `BillingState`, `BillingCountry`, `BillingPostalCode`, `Total`) VALUES\n")
@@ -1972,8 +1972,8 @@ def write_mysql_format(f, artists, albums, tracks, customers, invoices, invoice_
         batch = mysql_invoice_lines[batch_num:batch_num+batch_size]
         batch_index = batch_num // batch_size + 1
         
-        # Add progress message every 10 batches for large datasets
-        if batch_index % 10 == 1 and total_batches >= 10:
+        # Add progress message every 10 batches (or batch 1 for smaller datasets)
+        if (batch_index % 10 == 1 and total_batches >= 10) or (batch_index == 1 and total_batches < 10):
             f.write(f"SELECT CONCAT('[', NOW(), '] Inserting invoice lines... batch {batch_index} of {total_batches}') AS Progress;\n")
         
         f.write("INSERT INTO `InvoiceLine` (`InvoiceLineId`, `InvoiceId`, `TrackId`, `UnitPrice`, `Quantity`) VALUES\n")
